@@ -34,7 +34,7 @@
 # Same layout and bounds check as ':' in 08-forth-primitives.s.
 # clobbers: t0, t1, t2, a0, a4, a5, gp, tp
 make_header:
-    li t0, HERE
+    li t0, var_HERE
     lw t2, 0(t0)                # t2 = address of the new header
     add a5, t2, a1              # header + name length...
     addi a5, a5, 2*CELL         # ...+ link + count byte + alignment slack
@@ -42,7 +42,7 @@ make_header:
     addi gp, a5, CELL           # gp = new HERE
     li tp, LOGBUF-CELL          # keep one spare cell: CREATE reserves it for DOES>
     bge gp, tp, err_mem         # dictionary full
-    li t1, LATEST
+    li t1, var_LATEST
     lw a4, 0(t1)
     sw a4, 0(t2)                # link field = previous LATEST
     or a4, a1, a3               # flags + length byte
@@ -63,9 +63,9 @@ mkh_pad:
     j mkh_pad
 mkh_code:
     sw a2, 0(a5)                # code field
-    li t1, LATEST
+    li t1, var_LATEST
     sw t2, 0(t1)                # LATEST = the new word
-    li t0, HERE
+    li t0, var_HERE
     sw gp, 0(t0)                # HERE = just after the code field
     ret
 
@@ -482,7 +482,7 @@ defcode "pad", PADADDR, RZERO
 defcode "allot", ALLOT, PADADDR
     checkunderflow 0
     POP t1
-    li t2, HERE
+    li t2, var_HERE
     lw a4, 0(t2)
     add a4, a4, t1
     li a5, LOGBUF
@@ -609,12 +609,12 @@ defcode "unloop", UNLOOP, JDX
 # parse-name ( -- addr len )   Next space-delimited token from the TIB, advancing
 # >in. len = 0 when the line is exhausted.
 defcode "parse-name", PARSENAME, UNLOOP
-    li t2, TIB
-    li a4, TOIN
+    li t2, TIB_BOTTOM
+    li a4, var_TOIN
     lw a0, 0(a4)
     add a0, a0, t2              # a0 = parse position in the TIB
     call token                  # a0 = token start, a1 = token length
-    li t2, TIB
+    li t2, TIB_BOTTOM
     add t0, a0, a1
     sub t0, t0, t2
     sw t0, 0(a4)                # TOIN moves past the token
@@ -630,8 +630,8 @@ defcode "parse-name", PARSENAME, UNLOOP
 defcode "parse", PARSE, PARSENAME
     checkunderflow 0
     POP a3                      # delimiter
-    li t2, TIB
-    li a4, TOIN
+    li t2, TIB_BOTTOM
+    li a4, var_TOIN
     lw a0, 0(a4)
     add a0, a0, t2              # a0 = parse position
     lbu t0, 0(a0)
@@ -669,7 +669,7 @@ defcode "find-name", FINDNAME, PARSE
     checkunderflow CELL
     POP a1                      # length
     POP a0                      # name address
-    li t2, LATEST
+    li t2, var_LATEST
     lw t2, 0(t2)                # t2 = cursor in the dictionary chain
 fn_loop:
     beqz t2, fn_found           # end of chain: t2 = 0 is the "not found" answer
@@ -741,12 +741,12 @@ defcode "docol", DOCOLW, DOCONW
 #   : variable create 0 , ;
 #   : constant create , docon latest @ >cfa ! ;
 defcode "create", CREATE, DOCOLW
-    li t2, TIB
-    li a4, TOIN
+    li t2, TIB_BOTTOM
+    li a4, var_TOIN
     lw a0, 0(a4)
     add a0, a0, t2
     call token                  # a0 = token start, a1 = token length
-    li t2, TIB
+    li t2, TIB_BOTTOM
     add t0, a0, a1
     sub t0, t0, t2
     sw t0, 0(a4)                # TOIN moves past the token
@@ -756,7 +756,7 @@ defcode "create", CREATE, DOCOLW
     la a2, dovar_code
     li a3, 0                    # not hidden
     call make_header            # (its bounds check already covers the slot)
-    li t0, HERE
+    li t0, var_HERE
     lw t1, 0(t0)
     sw zero, 0(t1)              # the DOES> slot
     addi t1, t1, CELL
@@ -769,7 +769,7 @@ defcode "create", CREATE, DOCOLW
 # returns from the defining word (the thread after it must not run now).
 #   : does> ' xdoes , ; immediate
 defcode "xdoes", XDOES, CREATE
-    li a0, LATEST
+    li a0, var_LATEST
     lw a0, 0(a0)                # header of the word CREATE just made
     call to_cfa                 # a0 = its code field (clobbers t0)
     la t1, dodoes_code
@@ -795,6 +795,6 @@ defcode "abort", ABORT, BTICK
 # the data stack is left alone (ANS quit).
 defcode "quit", QUIT, ABORT
     li s0, RSP_TOP
-    li t0, STATE
+    li t0, var_STATE
     sw zero, 0(t0)
     j tib_init

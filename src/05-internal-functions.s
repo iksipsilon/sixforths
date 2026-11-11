@@ -153,7 +153,7 @@ lookup_next:
     j lookup_loop
 lookup_error:
     # check the STATE
-    li t0, STATE                # load the address of the STATE variable into temporary
+    li t0, var_STATE            # load the address of the STATE variable into temporary
     lw t0, 0(t0)                # load the current state into a temporary
     beqz t0, err_error          # if in execute mode (STATE = 0), jump to error handler to reset
 

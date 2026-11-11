@@ -63,8 +63,10 @@ hardware.
 - RAM 0x20000000: the user dictionary grows up from here (`HERE`).
   `FORTH_SIZE` = 0x1ADC = **6,876 bytes** of dictionary budget (up to `LOGBUF`).
 - RAM, top down: `DSP_TOP` 0x20002000, `RSP_TOP` 0x20001F00, `TIB_TOP` 0x20001E00,
-  `TIB` 0x20001D00 (256 B), `STATE` 0x20001CFC, `TOIN` 0x20001CF8, `HERE` 0x20001CF4,
-  `LATEST` 0x20001CF0, then log bookkeeping, `PAD` 0x20001BDC, `LOGBUF` 0x20001ADC.
+  `TIB_BOTTOM` 0x20001D00 (256 B), `var_STATE` 0x20001CFC, `var_TOIN` 0x20001CF8,
+  `var_HERE` 0x20001CF4, `var_LATEST` 0x20001CF0, then log bookkeeping, `PAD` 0x20001BDC,
+  `LOGBUF` 0x20001ADC. RAM-variable cells are named `var_X` as in jonesforth, so the bare
+  names stay free for word labels; `TIB_BOTTOM` is the start of the input buffer.
 
 ## REPL quirks (they affect how tests and prelude files must be written)
 

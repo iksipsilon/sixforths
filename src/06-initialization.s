@@ -17,7 +17,7 @@ boot:
 
     # initialize HERE variable
     li t0, RAM_BASE     # load RAM_BASE memory address
-    li t1, HERE         # load HERE variable
+    li t1, var_HERE     # load HERE variable
     sw t0, 0(t1)        # initialize HERE variable to contain RAM_BASE memory address
 
     # initialize LATEST variable
@@ -25,7 +25,7 @@ boot:
                         # (CH32V006 PORT: was word_SEMI; the eForth-style
                         # primitives in 11-eforth-primitives.s extend the
                         # chain and `wipe` (12-flash-log.s) is the new tail)
-    li t1, LATEST       # load LATEST variable
+    li t1, var_LATEST   # load LATEST variable
     sw t0, 0(t1)        # initialize LATEST variable to contain word_SEMI memory address
 
     # CH32V006 PORT: source-replay log initialization
@@ -89,13 +89,13 @@ reset_replay_done:
     mv a3, zero         # initialize Z register
 
     # initialize STATE variable
-    li t0, STATE        # load STATE variable
+    li t0, var_STATE    # load STATE variable
     sw zero, 0(t0)      # initialize STATE variable (0 = execute)
 
 .balign CELL
 # reset the RAM from the last defined word
 ram_init:
-    li t0, HERE         # load HERE memory address
+    li t0, var_HERE     # load HERE memory address
     lw t0, 0(t0)        # load HERE value
     li t1, PAD          # load PAD variable
 ram_zerofill:
@@ -111,8 +111,8 @@ ram_done:
 # reset the terminal input buffer
 tib_init:
     # initialize TOIN variable
-    li t0, TIB          # load TIB memory address
-    li t1, TOIN         # load TOIN variable
+    li t0, TIB_BOTTOM   # load TIB memory address
+    li t1, var_TOIN     # load TOIN variable
     li t2, TIB_TOP      # load TIB_TOP variable
     sw zero, 0(t1)      # initialize TOIN variable to contain zero
 tib_zerofill:

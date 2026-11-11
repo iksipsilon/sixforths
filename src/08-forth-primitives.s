@@ -98,31 +98,31 @@ defcode "emit", EMIT, KEY
 
 # tib ( -- addr )       Store TIB variable address in top of data stack
 defcode "tib", TIB, EMIT
-    li t1, TIB          # load variable into temporary
+    li t1, TIB_BOTTOM   # load variable into temporary
     PUSH t1
     NEXT
 
 # state ( -- addr )     Store STATE variable address in top of data stack
 defcode "state", STATE, TIB
-    li t1, STATE        # load variable into temporary
+    li t1, var_STATE    # load variable into temporary
     PUSH t1
     NEXT
 
 # >in ( -- addr )       Store TOIN variable address in top of data stack
 defcode ">in", TOIN, STATE
-    li t1, TOIN         # load variable into temporary
+    li t1, var_TOIN     # load variable into temporary
     PUSH t1
     NEXT
 
 # here ( -- addr )      Store HERE variable address in top of data stack
 defcode "here", HERE, TOIN
-    li t1, HERE         # load variable into temporary
+    li t1, var_HERE     # load variable into temporary
     PUSH t1
     NEXT
 
 # latest ( -- addr )     Store LATEST variable address in top of data stack
 defcode "latest", LATEST, HERE
-    li t1, LATEST       # load variable into temporary
+    li t1, var_LATEST   # load variable into temporary
     PUSH t1
     NEXT
 
@@ -132,14 +132,14 @@ defcode "latest", LATEST, HERE
 
 # : ( -- )              # Start the definition of a new word
 defcode ":", COLON, LATEST
-    li t2, TIB          # load TIB memory address
-    li a4, TOIN         # load TOIN variable into unused temporary register
+    li t2, TIB_BOTTOM   # load TIB memory address
+    li a4, var_TOIN     # load TOIN variable into unused temporary register
     lw a0, 0(a4)        # load TOIN value into temporary
     add a0, a0, t2      # add TIB to TOIN to get the start address of TOIN
     call token          # read the token
 
     # move TOIN
-    li t2, TIB          # load TIB memory address
+    li t2, TIB_BOTTOM   # load TIB memory address
     add t0, a0, a1      # add the size of the token to TOIN
     sub t0, t0, t2      # subtract the address of TOIN from TIB to get the new size of TOIN
     sw t0, 0(a4)        # move TOIN to process the next word in the TIB
@@ -152,7 +152,7 @@ defcode ":", COLON, LATEST
     # CH32V006 PORT: build a jonesforth-style header instead of a hashed one:
     # link cell, flags+length byte (HIDDEN while compiling), the name itself,
     # zero padding to the next CELL boundary, then the code field.
-    li t0, HERE
+    li t0, var_HERE
     lw t2, 0(t0)        # t2 = HERE value = address of the new word header
 
     # compute the code field address and the new HERE; bounds check first
@@ -164,7 +164,7 @@ defcode ":", COLON, LATEST
     bge gp, tp, err_mem # error if the memory address is out of bounds
 
     # link field: address of the previous word
-    li t1, LATEST
+    li t1, var_LATEST
     lw a4, 0(t1)        # load the address of the previous word (LATEST)
     sw a4, 0(t2)        # store it in the link field
 
@@ -196,15 +196,15 @@ colon_code:
     sw a2, 0(a5)        # store the codeword address into the code field
 
     # update LATEST variable
-    li t1, LATEST
+    li t1, var_LATEST
     sw t2, 0(t1)        # store the new word address into the LATEST variable
 
     # update HERE variable
-    li t0, HERE
+    li t0, var_HERE
     sw gp, 0(t0)        # store the new address of HERE into the HERE variable
 
     # update STATE variable
-    li t0, STATE        # load the address of the STATE variable into temporary
+    li t0, var_STATE    # load the address of the STATE variable into temporary
     li t1, 1            # set the STATE variable to compile mode (1 = compile)
     sw t1, 0(t0)        # store the current state back into the STATE variable
     NEXT
@@ -220,14 +220,14 @@ docol:
 # ; ( -- )              # End the definition of a new word
 defcode ";", SEMI, COLON, F_IMMEDIATE
     # unhide the word
-    li t0, LATEST       # copy the memory address of LATEST into temporary
+    li t0, var_LATEST   # copy the memory address of LATEST into temporary
     lw t0, 0(t0)        # load the address value into temporary
     lbu t1, CELL(t0)    # load the flags+length byte into temporary
     andi t1, t1, ~F_HIDDEN # unhide the word
     sb t1, CELL(t0)     # write the flags+length byte back to memory
 
     # store codeword into memory
-    li t0, HERE         # copy the memory address of HERE into temporary
+    li t0, var_HERE     # copy the memory address of HERE into temporary
     lw t2, 0(t0)        # load the HERE value into temporary
 
     # bounds check on the exit memory location
@@ -242,12 +242,12 @@ defcode ";", SEMI, COLON, F_IMMEDIATE
     sw t2, 0(t0)        # store the new address of HERE into the HERE variable
 
     # update the STATE variable
-    li t0, STATE        # load the address of the STATE variable into temporary
+    li t0, var_STATE    # load the address of the STATE variable into temporary
     sw zero, 0(t0)      # store the current state back into the STATE variable
     NEXT
 
 memory_error:
-    li t2, LATEST       # copy the memory address of LATEST into temporary
+    li t2, var_LATEST   # copy the memory address of LATEST into temporary
     lw t2, 0(t2)        # load the address value into temporary
     restorevars t2      # restore HERE and LATEST (t2)
     j err_mem

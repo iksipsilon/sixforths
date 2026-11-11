@@ -12,14 +12,14 @@
 .equ DSP_TOP, RAM_BASE + RAM_SIZE       # address of top of data stack
 .equ RSP_TOP, DSP_TOP - STACK_SIZE      # address of top of return stack
 .equ TIB_TOP, RSP_TOP - STACK_SIZE      # address of top of terminal buffer
-.equ TIB, TIB_TOP - STACK_SIZE          # address of bottom of terminal buffer
+.equ TIB_BOTTOM, TIB_TOP - STACK_SIZE   # address of bottom of terminal buffer
 
 # variables
-.equ STATE, TIB - CELL                  # 1 CELL for STATE variable
-.equ TOIN, STATE - CELL                 # 1 CELL for TOIN variable (looks into TIB)
-.equ HERE, TOIN - CELL                  # 1 CELL for HERE variable
-.equ LATEST, HERE - CELL                # 1 CELL for LATEST variable
-.equ NOOP, LATEST - CELL                # 1 CELL for NOOP variable
+.equ var_STATE, TIB_BOTTOM - CELL       # 1 CELL for STATE variable
+.equ var_TOIN, var_STATE - CELL         # 1 CELL for TOIN variable (looks into TIB)
+.equ var_HERE, var_TOIN - CELL          # 1 CELL for HERE variable
+.equ var_LATEST, var_HERE - CELL        # 1 CELL for LATEST variable
+.equ NOOP, var_LATEST - CELL            # 1 CELL for NOOP variable
 # CH32V006 PORT: source-replay log variables (see 12-flash-log.s)
 .equ LOGEN, NOOP - CELL                 # 1 CELL: logging enabled flag (0 = off)
 .equ LOGPND, LOGEN - CELL               # 1 CELL: pending byte count in LOGBUF

@@ -212,7 +212,7 @@ zbranch_skip:
 defcode ",", COMMA, ZBRANCH
     checkunderflow 0    # need 1 item
     POP t1
-    li t2, HERE
+    li t2, var_HERE
     lw a4, 0(t2)        # current HERE value
     li a5, LOGBUF       # dictionary bounds check, like COLON's
     bge a4, a5, err_mem
@@ -230,7 +230,7 @@ defcode ",", COMMA, ZBRANCH
 # works), so setting the flag on the LATEST word is all that is needed.
 # Usage, standard Forth style:  : name ... ; immediate
 defcode "immediate", IMMEDIATE, COMMA
-    li t1, LATEST
+    li t1, var_LATEST
     lw t1, 0(t1)        # address of the most recent word
     lbu t2, CELL(t1)    # its flags+length byte
     ori t2, t2, F_IMMEDIATE # set the immediate bit
@@ -248,27 +248,27 @@ defcode "immediate", IMMEDIATE, COMMA
 #   : until ' 0branch , , ; immediate
 defcode "'", TICK, IMMEDIATE, F_IMMEDIATE
     # parse the next token, mirroring process_token's use of TOIN
-    li t2, TIB
-    li a4, TOIN
+    li t2, TIB_BOTTOM
+    li a4, var_TOIN
     lw a0, 0(a4)
     add a0, a0, t2      # a0 = current parse position in the TIB
     call token          # a0 = token start, a1 = token length
-    li t2, TIB          # update TOIN past the consumed token
+    li t2, TIB_BOTTOM   # update TOIN past the consumed token
     add t0, a0, a1
     sub t0, t0, t2
     sw t0, 0(a4)
     beqz a1, err_error  # ' with nothing after it
-    li a2, LATEST       # lookup by name: a0 = token address, a1 = length
+    li a2, var_LATEST   # lookup by name: a0 = token address, a1 = length
     lw a2, 0(a2)
     call lookup         # a1 = word header address (lookup errors out if not found)
     mv a0, a1
     call to_cfa         # a0 = code field address
     # state-smart: push when executing, compile a literal when compiling
-    li t1, STATE
+    li t1, var_STATE
     lw t1, 0(t1)
     beqz t1, tick_push
     la t1, code_LIT     # compile: LIT codeword cell, then the cfa cell
-    li t2, HERE
+    li t2, var_HERE
     lw a4, 0(t2)
     li a5, LOGBUF-CELL  # need room for two cells
     bge a4, a5, err_mem
@@ -294,7 +294,7 @@ defcode ">cfa", TCFA, TICK
 # words ( -- )          List the names of all visible words in the dictionary,
 # newest first. This is the payoff of storing names instead of hashes.
 defcode "words", WORDS, TCFA
-    li a3, LATEST       # a3 (Z) survives uart_print/uart_put (they clobber
+    li a3, var_LATEST   # a3 (Z) survives uart_print/uart_put (they clobber
     lw a3, 0(a3)        # only a0-a2, t0, t1, ra) so it holds the chain pointer
 words_loop:
     beqz a3, words_done # end of the dictionary: link is 0

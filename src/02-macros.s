@@ -93,11 +93,11 @@
 # restore HERE and LATEST variables
 .macro restorevars reg
     # update HERE
-    li t0, HERE         # load HERE variable into temporary
+    li t0, var_HERE     # load HERE variable into temporary
     sw \reg, 0(t0)      # store the address of LATEST back into HERE
 
     # update LATEST
-    li t0, LATEST       # load LATEST variable into temporary
+    li t0, var_LATEST   # load LATEST variable into temporary
     lw t1, 0(\reg)      # load LATEST variable value into temporary
     sw t1, 0(t0)        # store LATEST word into LATEST variable
 .endm

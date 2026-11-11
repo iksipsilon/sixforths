@@ -133,7 +133,7 @@ log_commit:
     lw t1, 0(t0)
     beqz t1, log_commit_drop
     # skip blank lines (a lone space left by the converted newline)
-    li t0, TOIN
+    li t0, var_TOIN
     lw t1, 0(t0)                # t1 = line length in the TIB
     li t0, 1
     bleu t1, t0, log_commit_exit
@@ -145,7 +145,7 @@ log_commit:
     addi a4, a4, 1              # new count including the newline
     li a5, LOGBUF_SIZE - 1      # keep one byte spare for the even-length pad
     bgtu a4, a5, log_commit_off # definition too large for one batch
-    li a0, TIB
+    li a0, TIB_BOTTOM
     li a1, LOGBUF
     add a1, a1, t2
 log_commit_copy:
@@ -160,7 +160,7 @@ log_commit_copy:
     sw a4, 0(t0)                # LOGPND = new count (t0 is still LOGPND)
 
     # hold the batch while a colon definition is open
-    li t0, STATE
+    li t0, var_STATE
     lw t1, 0(t0)
     bnez t1, log_commit_exit
 

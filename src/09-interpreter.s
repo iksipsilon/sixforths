@@ -6,8 +6,8 @@
 
 # here's where the program starts (the interpreter)
 interpreter_start:
-    li t2, TIB                                  # load TIB memory address
-    li a4, TOIN                                 # load the TOIN variable into unused temporary register
+    li t2, TIB_BOTTOM                           # load TIB memory address
+    li a4, var_TOIN                             # load the TOIN variable into unused temporary register
     lw a1, 0(a4)                                # load TOIN value into X working register
     add a1, a1, t2                              # add TIB to TOIN to get the start address of TOIN
 
@@ -104,14 +104,14 @@ replace_newline:
 
 process_token:
     # process the token
-    li t2, TIB              # load TIB memory address
-    li a4, TOIN             # load TOIN variable into unused temporary register
+    li t2, TIB_BOTTOM       # load TIB memory address
+    li a4, var_TOIN         # load TOIN variable into unused temporary register
     lw a0, 0(a4)            # load TOIN address value into temporary
     add a0, a0, t2          # add TIB to TOIN to get the start address of TOIN
     call token              # read the token
 
     # move TOIN
-    li t2, TIB              # load TIB memory address
+    li t2, TIB_BOTTOM       # load TIB memory address
     add t0, a0, a1          # add the size of the token to TOIN
     sub t0, t0, t2          # subtract the address of TOIN from TIB to get the new size of TOIN
     sw t0, 0(a4)            # move TOIN to process the next word in the TIB
@@ -130,7 +130,7 @@ process_token:
     mv a1, tp               # restore a1
 
     # CH32V006 PORT: look the token up by name (a0 = address, a1 = length)
-    li a2, LATEST           # load LATEST variable into Y working register
+    li a2, var_LATEST       # load LATEST variable into Y working register
     lw a2, 0(a2)            # load LATEST value into Y working register
     call lookup             # search the dictionary; a1 = word header address
 
@@ -139,7 +139,7 @@ process_token:
     andi t0, t0, F_IMMEDIATE # read the status of the immediate flag bit
 
     # load the STATE variable value
-    li t1, STATE            # load the address of the STATE variable into temporary
+    li t1, var_STATE        # load the address of the STATE variable into temporary
     lw t1, 0(t1)            # load the current state into a temporary
 
     # decide if we want to execute or compile the word
@@ -173,7 +173,7 @@ compile:
     mv a0, a1               # copy the word header address into W
     call to_cfa             # compute the code field address (variable-length names)
     mv t0, a0               # copy the code field address into temporary
-    li t1, HERE             # load HERE variable into temporary
+    li t1, var_HERE         # load HERE variable into temporary
     lw t2, 0(t1)            # load HERE value into temporary
     sw t0, 0(t2)            # write the address of the codeword to the current definition
 
@@ -184,12 +184,12 @@ compile_done:
 
 push_number:
     # push to stack if STATE = 0 (execute)
-    li t1, STATE            # load the address of the STATE variable into temporary
+    li t1, var_STATE        # load the address of the STATE variable into temporary
     lw t1, 0(t1)            # load the current state into a temporary
     beqz t1, push_stack     # if in execute mode, push the number to the stack
     # push to memory if STATE = 1 (compile)
     la t0, code_LIT         # load the codeword address of LIT into temporary
-    li t1, HERE             # load HERE variable into temporary
+    li t1, var_HERE         # load HERE variable into temporary
     lw t2, 0(t1)            # load HERE value into temporary
     sw t0, 0(t2)            # write the codeword address of LIT to memory (HERE)
     sw a0, 4(t2)            # write the number from W to the next memory cell (HERE+4)
