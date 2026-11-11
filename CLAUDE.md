@@ -117,10 +117,14 @@ automatically (add its `.include` to `sixforths.s`). Ubuntu package:
 Hardware (the board is plugged in through a WCH-LinkE, attached to WSL2 with usbipd-win):
 
     minichlink -w sixforths.bin flash -b    # program the chip and reboot
-    picocom -b 115200 --imap lfcrlf --omap crlf /dev/ttyACM0   # talk to the REPL (Ctrl-A Ctrl-X to quit)
+    picocom -b 115200 --imap lfcrlf --omap crlf --send-cmd "ascii-xfr -sv -l 100" /dev/ttyACM0
+                                            # talk to the REPL (Ctrl-A Ctrl-X to quit)
 
 The two maps are needed: the board ends its lines with LF only, and it ignores CR,
-so Enter (CR) must be sent as LF. `make term` runs the same picocom command.
+so Enter (CR) must be sent as LF. `make term` runs the same picocom command. To load
+the prelude, press Ctrl-A Ctrl-S and give `prelude.f`: ascii-xfr sends one line, then
+waits 100 ms (the board does not read the UART while it processes a line; the slowest
+prelude line takes ~2 ms). It lives in RAM, so a reset loses it.
 
 Layout:
 - `sixforths.s` (repo root) is the top-level file. It includes `board.s`, `mcu.s`, then

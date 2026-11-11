@@ -73,9 +73,12 @@ flash-ch32v006:
 # --imap lfcrlf: FiveForths transmits bare LF; map to CR+LF for display
 # --omap crlf:   picocom sends CR on Enter; FiveForths ignores CR and
 #                terminates lines on LF, so map CR -> LF
+# --send-cmd:    Ctrl-A Ctrl-S sends a file (e.g. prelude.f) one line at a
+#                time with a 100 ms pause: the board does not read the UART
+#                while it processes a line (the slowest prelude line ~2 ms)
 
 term:
-		picocom -b 115200 --imap lfcrlf --omap crlf $(TERMINAL)
+		picocom -b 115200 --imap lfcrlf --omap crlf --send-cmd "ascii-xfr -sv -l 100" $(TERMINAL)
 
 # CH32V006 PORT: build for the CH32V006F8U6 (this is also the default)
 ch32v006f8u6:
