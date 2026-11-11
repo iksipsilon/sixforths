@@ -2,14 +2,12 @@
 # Forth primitives
 ##
 
-.equ word_NULL, 0
-
 # reboot ( -- )         # Reboot the entire system and initialize memory
-defcode "reboot", REBOOT, NULL
+defcode "reboot",6,,REBOOT
     j err_reboot        # jump to reboot
 
 # @ ( addr -- x )       Fetch memory at addr
-defcode "@", FETCH, REBOOT
+defcode "@",1,,FETCH
     checkunderflow 0    # check for stack underflow of data stack (1 CELL)
     lw t0, 0(sp)        # load the top of stack into temporary
     lw t0, 0(t0)        # load the value from the temporary (addr)
@@ -17,7 +15,7 @@ defcode "@", FETCH, REBOOT
     NEXT
 
 # ! ( x addr -- )       Store x at addr
-defcode "!", STORE, FETCH
+defcode "!",1,,STORE
     checkunderflow CELL # check for stack underflow of data stack (2 CELLs)
     lw t1, 0(sp)        # load the DSP value (addr) into temporary
     lw t0, CELL(sp)     # load the DSP value (x) into temporary
@@ -26,17 +24,17 @@ defcode "!", STORE, FETCH
     NEXT
 
 # sp@ ( -- addr )       Get current data stack pointer
-defcode "sp@", DSPFETCH, STORE
+defcode "sp@",3,,DSPFETCH
     PUSH sp             # store DSP in the top of the stack
     NEXT
 
 # rp@ ( -- addr )       Get current return stack pointer
-defcode "rp@", RSPFETCH, DSPFETCH
+defcode "rp@",3,,RSPFETCH
     PUSH s0             # store RSP in the top of the stack
     NEXT
 
 # 0= ( x -- f )         -1 if top of stack is 0, 0 otherwise
-defcode "0=", ZEQU, RSPFETCH
+defcode "0=",2,,ZEQU
     checkunderflow 0    # check for stack underflow of data stack (1 CELL)
     lw t0, 0(sp)        # load the DSP value (x) into temporary
     snez t0, t0         # store 0 in temporary if it's equal to 0, otherwise store 1
@@ -45,7 +43,7 @@ defcode "0=", ZEQU, RSPFETCH
     NEXT
 
 # + ( x1 x2 -- n )      Add the two values at the top of the stack
-defcode "+", ADD, ZEQU
+defcode "+",1,,ADD
     checkunderflow CELL # check for stack underflow of data stack (2 CELLs)
     POP t0              # pop DSP value (x1) into temporary
     lw t1, 0(sp)        # load DSP value (x2) into temporary
@@ -54,7 +52,7 @@ defcode "+", ADD, ZEQU
     NEXT
 
 # nand ( x1 x2 -- n )   Bitwise NAND the two values at the top of the stack
-defcode "nand", NAND, ADD
+defcode "nand",4,,NAND
     checkunderflow CELL # check for stack underflow of data stack (2 CELLs)
     POP t0              # pop DSP value (x1) into temporary
     lw t1, 0(sp)        # load DSP value (x2) into temporary
@@ -64,14 +62,14 @@ defcode "nand", NAND, ADD
     NEXT
 
 # lit ( -- n )          Get the next word from IP and push it to the stack, increment IP
-defcode "lit", LIT, NAND
+defcode "lit",3,,LIT
     lw t1, 0(s1)        # load the memory address from IP into temporary
     PUSH t1             # push the literal to the top of the stack
     addi s1, s1, CELL   # increment IP by 1 CELL
     NEXT
 
 # exit ( r:addr -- )    Resume execution at address at the top of the return stack
-defcode "exit", EXIT, LIT
+defcode "exit",4,,EXIT
     POPRSP s1           # pop RSP into IP
     NEXT
 
@@ -80,13 +78,13 @@ defcode "exit", EXIT, LIT
 ##
 
 # key ( -- x )          Read 8-bit character from uart input
-defcode "key", KEY, EXIT
+defcode "key",3,,KEY
     call uart_get       # read character from uart into W
     PUSH a0             # store character into top of data stack
     NEXT
 
 # emit ( x -- )         Write 8-bit character to uart output
-defcode "emit", EMIT, KEY
+defcode "emit",4,,EMIT
     checkunderflow 0    # check for stack underflow of data stack (1 CELL)
     POP a0              # copy top of data stack into W
     call uart_put       # send character from W to uart
@@ -97,31 +95,31 @@ defcode "emit", EMIT, KEY
 ##
 
 # tib ( -- addr )       Store TIB variable address in top of data stack
-defcode "tib", TIB, EMIT
+defcode "tib",3,,TIB
     li t1, TIB_BOTTOM   # load variable into temporary
     PUSH t1
     NEXT
 
 # state ( -- addr )     Store STATE variable address in top of data stack
-defcode "state", STATE, TIB
+defcode "state",5,,STATE
     li t1, var_STATE    # load variable into temporary
     PUSH t1
     NEXT
 
 # >in ( -- addr )       Store TOIN variable address in top of data stack
-defcode ">in", TOIN, STATE
+defcode ">in",3,,TOIN
     li t1, var_TOIN     # load variable into temporary
     PUSH t1
     NEXT
 
 # here ( -- addr )      Store HERE variable address in top of data stack
-defcode "here", HERE, TOIN
+defcode "here",4,,HERE
     li t1, var_HERE     # load variable into temporary
     PUSH t1
     NEXT
 
 # latest ( -- addr )     Store LATEST variable address in top of data stack
-defcode "latest", LATEST, HERE
+defcode "latest",6,,LATEST
     li t1, var_LATEST   # load variable into temporary
     PUSH t1
     NEXT
@@ -131,7 +129,7 @@ defcode "latest", LATEST, HERE
 ##
 
 # : ( -- )              # Start the definition of a new word
-defcode ":", COLON, LATEST
+defcode ":",1,,COLON
     li t2, TIB_BOTTOM   # load TIB memory address
     li a4, var_TOIN     # load TOIN variable into unused temporary register
     lw a0, 0(a4)        # load TOIN value into temporary
@@ -218,7 +216,7 @@ docol:
     j docol             # indirect jump to interpreter after executing a word
 
 # ; ( -- )              # End the definition of a new word
-defcode ";", SEMI, COLON, F_IMMEDIATE
+defcode ";",1,F_IMMEDIATE,SEMI
     # unhide the word
     li t0, var_LATEST   # copy the memory address of LATEST into temporary
     lw t0, 0(t0)        # load the address value into temporary
@@ -234,7 +232,7 @@ defcode ";", SEMI, COLON, F_IMMEDIATE
     li a4, LOGBUF       # load out of bounds memory address (LOGBUF)
     bge t2, a4, memory_error # error if the memory address is out of bounds
 
-    la t1, code_EXIT    # load the codeword address into temporary
+    la t1, EXIT         # load the codeword address into temporary
     sw t1, 0(t2)        # store the codeword address into HERE
 
     # move HERE pointer

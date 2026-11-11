@@ -11,9 +11,6 @@
 # QingKe V2 alignment rules: cell accesses (lw/sw) here touch only the data
 # stack, return stack, and dictionary cells -- all CELL-aligned by
 # construction. Byte accesses (lbu/sb in c@/c!) are alignment-free.
-#
-# The dictionary chain continues from word_SEMI (the previous tail); the new
-# tail is word_COMMA, and 06-initialization.s initializes LATEST to it.
 ##
 
 ##
@@ -21,20 +18,20 @@
 ##
 
 # drop ( x -- )         Discard the top of the data stack
-defcode "drop", DROP, SEMI
+defcode "drop",4,,DROP
     checkunderflow 0    # need 1 item
     addi sp, sp, CELL   # move the DSP up by 1 cell
     NEXT
 
 # dup ( x -- x x )      Duplicate the top of the data stack
-defcode "dup", DUP, DROP
+defcode "dup",3,,DUP
     checkunderflow 0    # need 1 item
     lw t1, 0(sp)        # load the top of the stack
     PUSH t1             # push a copy (PUSH clobbers t0)
     NEXT
 
 # swap ( a b -- b a )   Exchange the top two items
-defcode "swap", SWAP, DUP
+defcode "swap",4,,SWAP
     checkunderflow CELL # need 2 items
     lw t1, 0(sp)        # b
     lw t2, CELL(sp)     # a
@@ -43,21 +40,21 @@ defcode "swap", SWAP, DUP
     NEXT
 
 # over ( a b -- a b a ) Push a copy of the second item
-defcode "over", OVER, SWAP
+defcode "over",4,,OVER
     checkunderflow CELL # need 2 items
     lw t1, CELL(sp)     # a
     PUSH t1
     NEXT
 
 # sp! ( a -- )          Set the data stack pointer
-defcode "sp!", DSPSTORE, OVER
+defcode "sp!",3,,DSPSTORE
     checkunderflow 0    # need 1 item
     POP t1
     mv sp, t1
     NEXT
 
 # rp! ( a -- )          Set the return stack pointer
-defcode "rp!", RSPSTORE, DSPSTORE
+defcode "rp!",3,,RSPSTORE
     checkunderflow 0    # need 1 item
     POP t1
     mv s0, t1
@@ -68,20 +65,20 @@ defcode "rp!", RSPSTORE, DSPSTORE
 ##
 
 # >r ( x -- ; R: -- x ) Move top of data stack to the return stack
-defcode ">r", TOR, RSPSTORE
+defcode ">r",2,,TOR
     checkunderflow 0    # need 1 item
     POP t1
     PUSHRSP t1          # (PUSHRSP clobbers t0)
     NEXT
 
 # r> ( -- x ; R: x -- ) Move top of return stack to the data stack
-defcode "r>", FROMR, TOR
+defcode "r>",2,,FROMR
     POPRSP t1           # (POPRSP checks RSP underflow, clobbers t0)
     PUSH t1
     NEXT
 
 # r@ ( -- x ; R: x -- x ) Copy the top of the return stack
-defcode "r@", RFETCH, FROMR
+defcode "r@",2,,RFETCH
     li t0, RSP_TOP              # RSP underflow check without popping
     bge s0, t0, err_underflow
     lw t1, 0(s0)
@@ -93,7 +90,7 @@ defcode "r@", RFETCH, FROMR
 ##
 
 # c@ ( a -- c )         Fetch one byte from address a
-defcode "c@", CFETCH, RFETCH
+defcode "c@",2,,CFETCH
     checkunderflow 0    # need 1 item
     lw t1, 0(sp)        # load the address
     lbu t1, 0(t1)       # load the byte (any alignment is fine for lbu)
@@ -101,7 +98,7 @@ defcode "c@", CFETCH, RFETCH
     NEXT
 
 # c! ( c a -- )         Store the byte c at address a
-defcode "c!", CSTORE, CFETCH
+defcode "c!",2,,CSTORE
     checkunderflow CELL # need 2 items
     POP t1              # address
     POP t2              # byte value
@@ -113,7 +110,7 @@ defcode "c!", CSTORE, CFETCH
 ##
 
 # and ( a b -- a&b )
-defcode "and", AND, CSTORE
+defcode "and",3,,AND
     checkunderflow CELL # need 2 items
     POP t1
     lw t2, 0(sp)
@@ -122,7 +119,7 @@ defcode "and", AND, CSTORE
     NEXT
 
 # or ( a b -- a|b )
-defcode "or", OR, AND
+defcode "or",2,,OR
     checkunderflow CELL # need 2 items
     POP t1
     lw t2, 0(sp)
@@ -131,7 +128,7 @@ defcode "or", OR, AND
     NEXT
 
 # xor ( a b -- a^b )
-defcode "xor", XOR, OR
+defcode "xor",3,,XOR
     checkunderflow CELL # need 2 items
     POP t1
     lw t2, 0(sp)
@@ -140,7 +137,7 @@ defcode "xor", XOR, OR
     NEXT
 
 # invert ( n -- ~n )    Bitwise complement (convenience; = -1 xor)
-defcode "invert", INVERT, XOR
+defcode "invert",6,,INVERT
     checkunderflow 0    # need 1 item
     lw t1, 0(sp)
     xori t1, t1, -1
@@ -148,7 +145,7 @@ defcode "invert", INVERT, XOR
     NEXT
 
 # 0< ( n -- f )         True (-1) if n is negative, else 0 (eForth's only compare)
-defcode "0<", ZLESS, INVERT
+defcode "0<",2,,ZLESS
     checkunderflow 0    # need 1 item
     lw t1, 0(sp)
     srai t1, t1, 31     # arithmetic shift: sign bit fills the word
@@ -160,7 +157,7 @@ defcode "0<", ZLESS, INVERT
 ##
 
 # um+ ( u u -- sum carry ) Unsigned add with carry (eForth's arithmetic seed)
-defcode "um+", UMPLUS, ZLESS
+defcode "um+",3,,UMPLUS
     checkunderflow CELL # need 2 items
     lw t1, CELL(sp)     # first operand
     lw t2, 0(sp)        # second operand
@@ -171,7 +168,7 @@ defcode "um+", UMPLUS, ZLESS
     NEXT
 
 # - ( a b -- a-b )      Subtraction
-defcode "-", SUB, UMPLUS
+defcode "-",1,,SUB
     checkunderflow CELL # need 2 items
     POP t1              # b
     lw t2, 0(sp)        # a
@@ -186,19 +183,19 @@ defcode "-", SUB, UMPLUS
 # execute ( cfa -- )    Execute the word whose code field address is on the stack
 # CH32V006 PORT: takes a code field address now, which is what ' produces and
 # what compiled cells contain. To execute the latest word: latest @ >cfa execute
-defcode "execute", EXECUTE, SUB
+defcode "execute",7,,EXECUTE
     checkunderflow 0    # need 1 item
     POP a0              # a0 = codeword address (docol relies on W = codeword)
     lw t0, 0(a0)        # load the body address
     jr t0               # jump to it; its NEXT continues the thread (no NEXT here)
 
 # branch ( -- )         Unconditional: IP = cell at IP (compile-only, lay target with ,)
-defcode "branch", BRANCH, EXECUTE
+defcode "branch",6,,BRANCH
     lw s1, 0(s1)        # absolute target address stored in the next cell
     NEXT
 
 # 0branch ( f -- )      Branch if the flag is zero, else skip the target cell
-defcode "0branch", ZBRANCH, BRANCH
+defcode "0branch",7,,ZBRANCH
     checkunderflow 0    # need 1 item
     POP t1
     bnez t1, zbranch_skip
@@ -209,7 +206,7 @@ zbranch_skip:
     NEXT
 
 # , ( x -- )            Append a cell to the dictionary at HERE
-defcode ",", COMMA, ZBRANCH
+defcode ",",1,,COMMA
     checkunderflow 0    # need 1 item
     POP t1
     li t2, var_HERE
@@ -229,7 +226,7 @@ defcode ",", COMMA, ZBRANCH
 # The interpreter already honors F_IMMEDIATE in compile mode (that is how ';'
 # works), so setting the flag on the LATEST word is all that is needed.
 # Usage, standard Forth style:  : name ... ; immediate
-defcode "immediate", IMMEDIATE, COMMA
+defcode "immediate",9,,IMMEDIATE
     li t1, var_LATEST
     lw t1, 0(t1)        # address of the most recent word
     lbu t2, CELL(t1)    # its flags+length byte
@@ -246,7 +243,7 @@ defcode "immediate", IMMEDIATE, COMMA
 # so user code never does header arithmetic. Control flow in Forth is now:
 #   : begin here @ ; immediate
 #   : until ' 0branch , , ; immediate
-defcode "'", TICK, IMMEDIATE, F_IMMEDIATE
+defcode "'",1,F_IMMEDIATE,TICK
     # parse the next token, mirroring process_token's use of TOIN
     li t2, TIB_BOTTOM
     li a4, var_TOIN
@@ -267,7 +264,7 @@ defcode "'", TICK, IMMEDIATE, F_IMMEDIATE
     li t1, var_STATE
     lw t1, 0(t1)
     beqz t1, tick_push
-    la t1, code_LIT     # compile: LIT codeword cell, then the cfa cell
+    la t1, LIT          # compile: LIT codeword cell, then the cfa cell
     li t2, var_HERE
     lw a4, 0(t2)
     li a5, LOGBUF-CELL  # need room for two cells
@@ -284,7 +281,7 @@ tick_push:
 # >cfa ( wa -- cfa )    Convert a word header address (e.g. latest @) to its
 # code field address, skipping the link, the flags+length byte, the name,
 # and the alignment padding (jonesforth >CFA).
-defcode ">cfa", TCFA, TICK
+defcode ">cfa",4,,TCFA
     checkunderflow 0    # need 1 item
     lw a0, 0(sp)        # load the header address from the top of the stack
     call to_cfa         # a0 = code field address (clobbers t0, ra)
@@ -293,7 +290,7 @@ defcode ">cfa", TCFA, TICK
 
 # words ( -- )          List the names of all visible words in the dictionary,
 # newest first. This is the payoff of storing names instead of hashes.
-defcode "words", WORDS, TCFA
+defcode "words",5,,WORDS
     li a3, var_LATEST   # a3 (Z) survives uart_print/uart_put (they clobber
     lw a3, 0(a3)        # only a0-a2, t0, t1, ra) so it holds the chain pointer
 words_loop:

@@ -21,12 +21,12 @@ boot:
     sw t0, 0(t1)        # initialize HERE variable to contain RAM_BASE memory address
 
     # initialize LATEST variable
-    la t0, word_QUIT    # load address of the last word in Flash memory
-                        # (CH32V006 PORT: was word_SEMI; the eForth-style
-                        # primitives in 11-eforth-primitives.s extend the
-                        # chain and `wipe` (12-flash-log.s) is the new tail)
+    la t0, last_word    # load address of the last word in Flash memory
+                        # (CH32V006 PORT: was word_SEMI; last_word is set in
+                        # sixforths.s after the last include, so it always
+                        # follows the end of the chain)
     li t1, var_LATEST   # load LATEST variable
-    sw t0, 0(t1)        # initialize LATEST variable to contain word_SEMI memory address
+    sw t0, 0(t1)        # initialize LATEST variable to contain last_word memory address
 
     # CH32V006 PORT: source-replay log initialization
     call flash_unlock   # unlock the FPEC: program/erase enabled from here on

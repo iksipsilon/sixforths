@@ -41,11 +41,17 @@ hardware.
 - Indirect threaded. Word header: link cell, flags+length byte, name, zero padding to
   a cell boundary, then the code field. Flags: `F_IMMEDIATE` 0x80, `F_HIDDEN` 0x20,
   `F_LENMASK` 0x1f, so **names are at most 31 characters**.
-- Define assembly words with `defcode name, label, link, flags` (`src/02-macros.s`).
-  Each new word's `link` is the previous word's label.
-- **The dictionary chain tail must match `la t0, word_QUIT` in `src/06-initialization.s`**
-  (that sets LATEST at boot). When you append a word to the chain, update that line
-  to the new last word, or the new word will be invisible.
+- Define words with jonesforth's macros (`src/02-macros.s`): `defcode name, namelen,
+  flags=0, label` for assembly (`defcode "1+",2,,ONEPLUS`), `defword name, namelen,
+  flags=0, label` for a thread (`defword "2+",2,,TWOPLUS` then
+  `.int ONEPLUS, ONEPLUS, EXIT`). Labels: `name_X` = header, `X` = codeword (what threads
+  list), `code_X` = machine code. Headers, codewords and threads go to `.rodata`, machine
+  code to `.text`; after a `defword` thread, write `.text` before any plain code. The flag
+  is `F_IMMEDIATE` (jonesforth: `F_IMMED`). A wrong `namelen` stops the build with
+  "namelen of X does not match its name" (the line number points into the macro).
+- Words chain automatically in assembly (include) order through `link`. `last_word`,
+  set after the last include in `sixforths.s`, is where LATEST starts at boot, so there is
+  no chain tail to update by hand.
 - Forth truth values are -1 / 0. `'` is state-smart. `branch` / `0branch` targets are
   absolute addresses. `emit` sends exactly one byte (no leading space).
 - `number` parses decimal or `0x` hex (uppercase A-F). There is no BASE for input;
@@ -57,7 +63,7 @@ hardware.
 
 - Flash 0x00000000: kernel + `.rodata`, **must stay under 16 KiB** (`FLASH` `LENGTH` in
   `src/board/ch32v006f8u6/linker.ld`; confirm it says 16k).
-  Currently 10,680 bytes. Report the size after every change.
+  Currently 10,248 bytes. Report the size after every change.
 - Flash 0x08004000-0x08006800: source-replay log (10 KiB). Space above that is
   reserved for the phonebook / SMS storage. Do not touch it casually.
 - RAM 0x20000000: the user dictionary grows up from here (`HERE`).
@@ -114,8 +120,8 @@ so Enter (CR) must be sent as LF. `make term` runs the same picocom command.
 
 Layout:
 - `sixforths.s` (repo root) is the top-level file. It includes `board.s`, `mcu.s`, then
-  `src/01-*.s` ... `src/13-ans-primitives.s` **in that order**; `13` must stay the last
-  include so the dictionary chain ends in `word_QUIT`.
+  `src/01-*.s` ... `src/13-ans-primitives.s` **in that order**. The dictionary follows the
+  include order, and `.equ last_word, link` after the last include marks its end.
 - `src/board/ch32v006f8u6/` holds `board.s` and `linker.ld`; `src/mcu/ch32v006/` holds
   `mcu.s` (pin and register equates). Folder names are singular (`board`, `mcu`).
 - `src/13-ans-primitives.s` holds the ANS-style assembly words.
@@ -154,7 +160,7 @@ Layout:
    Never push without asking.
 6. Match the existing assembly style and comments. Where the source marks deliberate
    differences from upstream FiveForths (look for `CH32V006 PORT:` comments), keep
-   marking them the same way. Keep the `la t0, word_QUIT` chain tail up to date.
+   marking them the same way.
 7. Prefer changing a small number of files at a time. If a task needs more than a few
    files, say so and propose the plan first.
 

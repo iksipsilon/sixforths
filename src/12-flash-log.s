@@ -23,8 +23,6 @@
 # from flash: the core stalls while the FPEC is busy, which is fine.
 ##
 
-.section .text            # CH32V006 PORT: defcode leaves .rodata active;
-                          # switch back so this file's code lands in .text
 .balign CELL
 # wait until the FPEC is idle
 # clobbers: t0 (returns FLASH_R_BASE in t0), t1
@@ -226,20 +224,20 @@ msg_logoff: .ascii "  ? log off\n"
 ##
 
 # +log ( -- )           Enable logging of successful lines to the flash log
-defcode "+log", PLOG, WORDS
+defcode "+log",4,,PLOG
     li t0, LOGEN
     li t1, 1
     sw t1, 0(t0)
     NEXT
 
 # -log ( -- )           Disable logging (this line itself is not logged)
-defcode "-log", MLOG, PLOG
+defcode "-log",4,,MLOG
     li t0, LOGEN
     sw zero, 0(t0)
     NEXT
 
 # wipe ( -- )           Erase the whole log region and disable logging
-defcode "wipe", WIPE, MLOG
+defcode "wipe",4,,WIPE
     li t0, LOGEN
     sw zero, 0(t0)      # logging off (so this line is never logged)
     li t0, LOGPND

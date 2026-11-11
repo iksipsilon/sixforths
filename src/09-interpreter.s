@@ -188,7 +188,7 @@ push_number:
     lw t1, 0(t1)            # load the current state into a temporary
     beqz t1, push_stack     # if in execute mode, push the number to the stack
     # push to memory if STATE = 1 (compile)
-    la t0, code_LIT         # load the codeword address of LIT into temporary
+    la t0, LIT              # load the codeword address of LIT into temporary
     li t1, var_HERE         # load HERE variable into temporary
     lw t2, 0(t1)            # load HERE value into temporary
     sw t0, 0(t2)            # write the codeword address of LIT to memory (HERE)

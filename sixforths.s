@@ -55,3 +55,7 @@ _start:
 .include "11-eforth-primitives.s" # eForth-style kernel extensions (CH32V006 port)
 .include "12-flash-log.s"         # source-replay log: flash persistence (CH32V006 port)
 .include "13-ans-primitives.s"    # ANS-style assembly words (CH32V006 port)
+
+# CH32V006 PORT: header of the last word in flash. defcode/defword chain the
+# words in assembly order through `link` (02-macros.s); LATEST starts here.
+.equ last_word, link

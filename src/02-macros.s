@@ -43,31 +43,55 @@
     addi s0, s0, CELL   # increment RSP by 1 cell
 .endm
 
-# define a primitive dictionary word (jonesforth-style header)
-# CH32V006 PORT: the header stores the actual name as a counted string
-# instead of a djb2 hash. Layout: link cell, flags+length byte, name bytes,
-# zero padding to the next CELL boundary, code field. The length is computed
-# by the assembler (9f - 8f), so the name string is the single source of
-# truth. Pass F_IMMEDIATE via the optional flags argument.
-.macro defcode name, label, link, flags=0
+# Dictionary words, as in jonesforth
+# CH32V006 PORT: upstream hashed the name and took the previous word's label
+# as an argument. Now:
+#   defcode name, namelen, flags=0, label    a word written in assembly
+#   defword name, namelen, flags=0, label    a colon word written as a thread
+# e.g.  defcode "1+",2,,ONEPLUS              defword "2+",2,,TWOPLUS
+#           ... machine code ... NEXT            .int ONEPLUS, ONEPLUS, EXIT
+# Labels: name_X = header, X = codeword (what a thread lists), code_X =
+# machine code of a defcode word. Header: link cell, flags+length byte, name,
+# zero padding to a CELL boundary, then the codeword. Headers and codewords
+# go to .rodata, machine code to .text. `link` chains the headers in assembly
+# order (0 ends the chain; sixforths.s saves the last one as last_word). The
+# build stops if namelen does not match the name. RISC-V note: jonesforth's
+# `.align 4` would mean 16 bytes here, hence .balign CELL.
+.set link, 0
+
+# header shared by defcode and defword
+.macro defheader name, namelen, flags, label
     .section .rodata
-    .balign CELL        # align to CELL bytes boundary
-    .globl word_\label
-  word_\label :
-    .4byte word_\link   # 32-bit pointer to the link (previous word header)
-    .globl flags_\label
-  flags_\label :
-    .byte (9f - 8f) + \flags    # flags+length byte
-  8:
-    .ascii "\name"      # the word name itself (GAS strips the quotes the
-                        # call site passes, so they are re-added here)
-  9:
-    .balign CELL, 0     # pad the name with zeros to a CELL boundary
+    .balign CELL                # headers start on a CELL boundary
+    .globl name_\label
+name_\label :
+    .equ .Lprev_\@, link        # snapshot of link: the RISC-V assembler
+                                # refuses a reloc against a redefined symbol
+    .4byte .Lprev_\@            # link: header of the previous word
+    .set link, name_\label
+    .byte \flags + \namelen     # flags+length byte
+8:  .ascii "\name"              # the name (GAS strips the call site's quotes)
+9:  .if (9b - 8b) - \namelen
+    .error "namelen of \label does not match its name"
+    .endif
+    .balign CELL, 0             # pad the name with zeros to a CELL boundary
+    .globl \label
+\label :                        # the codeword follows
+.endm
+
+.macro defcode name, namelen, flags=0, label
+    defheader "\name", \namelen, \flags, \label
+    .4byte code_\label          # codeword: address of the machine code
+    .text
     .globl code_\label
-  code_\label :
-    .4byte body_\label  # 32-bit pointer to codeword of label
-    .globl body_\label
-  body_\label :         # assembly code below
+code_\label :                   # machine code follows, ending with NEXT
+.endm
+
+# defword leaves .rodata active for the thread; put .text before any plain
+# code that follows it.
+.macro defword name, namelen, flags=0, label
+    defheader "\name", \namelen, \flags, \label
+    .4byte docol                # codeword: the colon-definition interpreter
 .endm
 
 # check a character

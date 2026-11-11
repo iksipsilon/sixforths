@@ -19,12 +19,7 @@
 # 09-interpreter.s swallows those as comment starters before they reach the
 # TIB, so a word called (loop) could be defined but never typed. The loop
 # runtime words are therefore called xdo, xloop and xplusloop.
-#
-# The dictionary chain continues from word_WIPE; the new tail is word_QUIT,
-# and 06-initialization.s must initialize LATEST to it.
 ##
-
-.section .text            # defcode leaves .rodata active; helpers belong in .text
 
 .balign CELL
 # make_header: build a dictionary header at HERE
@@ -103,7 +98,7 @@ dodoes_code:
 ##
 
 # 1+ ( n -- n+1 )
-defcode "1+", ONEPLUS, WIPE
+defcode "1+",2,,ONEPLUS
     checkunderflow 0
     lw t1, 0(sp)
     addi t1, t1, 1
@@ -111,7 +106,7 @@ defcode "1+", ONEPLUS, WIPE
     NEXT
 
 # 1- ( n -- n-1 )
-defcode "1-", ONEMINUS, ONEPLUS
+defcode "1-",2,,ONEMINUS
     checkunderflow 0
     lw t1, 0(sp)
     addi t1, t1, -1
@@ -119,7 +114,7 @@ defcode "1-", ONEMINUS, ONEPLUS
     NEXT
 
 # 2* ( x -- x*2 )
-defcode "2*", TWOSTAR, ONEMINUS
+defcode "2*",2,,TWOSTAR
     checkunderflow 0
     lw t1, 0(sp)
     slli t1, t1, 1
@@ -127,7 +122,7 @@ defcode "2*", TWOSTAR, ONEMINUS
     NEXT
 
 # 2/ ( n -- n/2 )       Arithmetic shift: the sign is preserved
-defcode "2/", TWOSLASH, TWOSTAR
+defcode "2/",2,,TWOSLASH
     checkunderflow 0
     lw t1, 0(sp)
     srai t1, t1, 1
@@ -135,7 +130,7 @@ defcode "2/", TWOSLASH, TWOSTAR
     NEXT
 
 # cells ( n -- n*4 )
-defcode "cells", CELLS, TWOSLASH
+defcode "cells",5,,CELLS
     checkunderflow 0
     lw t1, 0(sp)
     slli t1, t1, 2
@@ -143,7 +138,7 @@ defcode "cells", CELLS, TWOSLASH
     NEXT
 
 # cell+ ( a -- a+4 )
-defcode "cell+", CELLPLUS, CELLS
+defcode "cell+",5,,CELLPLUS
     checkunderflow 0
     lw t1, 0(sp)
     addi t1, t1, CELL
@@ -151,7 +146,7 @@ defcode "cell+", CELLPLUS, CELLS
     NEXT
 
 # negate ( n -- -n )
-defcode "negate", NEGATE, CELLPLUS
+defcode "negate",6,,NEGATE
     checkunderflow 0
     lw t1, 0(sp)
     neg t1, t1
@@ -159,7 +154,7 @@ defcode "negate", NEGATE, CELLPLUS
     NEXT
 
 # lshift ( x u -- x<<u )  The core uses the low 5 bits of u: u >= 32 wraps.
-defcode "lshift", LSHIFT, NEGATE
+defcode "lshift",6,,LSHIFT
     checkunderflow CELL
     POP t1                      # u
     lw t2, 0(sp)                # x
@@ -168,7 +163,7 @@ defcode "lshift", LSHIFT, NEGATE
     NEXT
 
 # rshift ( x u -- x>>u )  Logical shift. Same u >= 32 caveat as lshift.
-defcode "rshift", RSHIFT, LSHIFT
+defcode "rshift",6,,RSHIFT
     checkunderflow CELL
     POP t1                      # u
     lw t2, 0(sp)                # x
@@ -177,7 +172,7 @@ defcode "rshift", RSHIFT, LSHIFT
     NEXT
 
 # * ( n1 n2 -- n3 )     Low 32 bits of the product (Zmmul `mul`)
-defcode "*", MUL, RSHIFT
+defcode "*",1,,MUL
     checkunderflow CELL
     POP t1
     lw t2, 0(sp)
@@ -189,7 +184,7 @@ defcode "*", MUL, RSHIFT
 # Built from four 16x16 `mul`s so it needs nothing beyond the base Zmmul `mul`
 # (no mulhu): result = p00 + (p01+p10)<<16 + p11<<32, with the carries of the
 # middle sum and of the low add folded into the high word.
-defcode "um*", UMSTAR, MUL
+defcode "um*",3,,UMSTAR
     checkunderflow CELL
     lw a1, 0(sp)                # b
     lw a2, CELL(sp)             # a
@@ -222,7 +217,7 @@ defcode "um*", UMSTAR, MUL
 # every um/mod). u = 0 gives quot = -1 instead of trapping. The 33-bit case
 # (remainder shifts a 1 out of bit 31) is handled explicitly, so divisors
 # >= 2^31 work.   : u/mod 0 swap um/mod ;
-defcode "um/mod", UMDIVMOD, UMSTAR
+defcode "um/mod",6,,UMDIVMOD
     checkunderflow 2*CELL
     lw a2, 0(sp)                # divisor
     lw t1, CELL(sp)             # hi -> becomes the remainder
@@ -252,7 +247,7 @@ umdm_next:
 ##
 
 # = ( a b -- f )
-defcode "=", EQUAL, UMDIVMOD
+defcode "=",1,,EQUAL
     checkunderflow CELL
     POP t1
     lw t2, 0(sp)
@@ -263,7 +258,7 @@ defcode "=", EQUAL, UMDIVMOD
     NEXT
 
 # <> ( a b -- f )
-defcode "<>", NOTEQUAL, EQUAL
+defcode "<>",2,,NOTEQUAL
     checkunderflow CELL
     POP t1
     lw t2, 0(sp)
@@ -274,7 +269,7 @@ defcode "<>", NOTEQUAL, EQUAL
     NEXT
 
 # < ( a b -- f )       Signed
-defcode "<", LESS, NOTEQUAL
+defcode "<",1,,LESS
     checkunderflow CELL
     POP t1                      # b
     lw t2, 0(sp)                # a
@@ -284,7 +279,7 @@ defcode "<", LESS, NOTEQUAL
     NEXT
 
 # > ( a b -- f )       Signed
-defcode ">", GREATER, LESS
+defcode ">",1,,GREATER
     checkunderflow CELL
     POP t1
     lw t2, 0(sp)
@@ -294,7 +289,7 @@ defcode ">", GREATER, LESS
     NEXT
 
 # u< ( u1 u2 -- f )
-defcode "u<", ULESS, GREATER
+defcode "u<",2,,ULESS
     checkunderflow CELL
     POP t1
     lw t2, 0(sp)
@@ -304,7 +299,7 @@ defcode "u<", ULESS, GREATER
     NEXT
 
 # u> ( u1 u2 -- f )
-defcode "u>", UGREATER, ULESS
+defcode "u>",2,,UGREATER
     checkunderflow CELL
     POP t1
     lw t2, 0(sp)
@@ -318,7 +313,7 @@ defcode "u>", UGREATER, ULESS
 ##
 
 # +! ( n a -- )         Add n to the cell at a (a must be CELL-aligned)
-defcode "+!", PLUSSTORE, UGREATER
+defcode "+!",2,,PLUSSTORE
     checkunderflow CELL
     POP t1                      # address
     POP t2                      # n
@@ -328,7 +323,7 @@ defcode "+!", PLUSSTORE, UGREATER
     NEXT
 
 # cmove ( src dst u -- )    Copy u bytes, lowest address first (any alignment)
-defcode "cmove", CMOVE, PLUSSTORE
+defcode "cmove",5,,CMOVE
     checkunderflow 2*CELL
     POP t1                      # u
     POP t2                      # dst
@@ -346,7 +341,7 @@ cmove_done:
 
 # cmove> ( src dst u -- )   Copy u bytes, highest address first (overlap-safe
 # when dst > src)
-defcode "cmove>", CMOVEUP, CMOVE
+defcode "cmove>",6,,CMOVEUP
     checkunderflow 2*CELL
     POP t1                      # u
     POP t2                      # dst
@@ -365,7 +360,7 @@ cmoveup_done:
     NEXT
 
 # fill ( a u c -- )     Set u bytes at a to c
-defcode "fill", FILL, CMOVEUP
+defcode "fill",4,,FILL
     checkunderflow 2*CELL
     POP t1                      # c
     POP t2                      # u
@@ -384,7 +379,7 @@ fill_done:
 ##
 
 # rot ( a b c -- b c a )
-defcode "rot", ROT, FILL
+defcode "rot",3,,ROT
     checkunderflow 2*CELL
     lw t1, 0(sp)                # c
     lw t2, CELL(sp)             # b
@@ -395,7 +390,7 @@ defcode "rot", ROT, FILL
     NEXT
 
 # nip ( a b -- b )
-defcode "nip", NIP, ROT
+defcode "nip",3,,NIP
     checkunderflow CELL
     lw t1, 0(sp)
     addi sp, sp, CELL
@@ -403,7 +398,7 @@ defcode "nip", NIP, ROT
     NEXT
 
 # 2dup ( a b -- a b a b )
-defcode "2dup", TWODUP, NIP
+defcode "2dup",4,,TWODUP
     checkunderflow CELL
     lw t1, 0(sp)                # b
     lw t2, CELL(sp)             # a
@@ -412,13 +407,13 @@ defcode "2dup", TWODUP, NIP
     NEXT
 
 # 2drop ( a b -- )
-defcode "2drop", TWODROP, TWODUP
+defcode "2drop",5,,TWODROP
     checkunderflow CELL
     addi sp, sp, 2*CELL
     NEXT
 
 # ?dup ( x -- 0 | x x )
-defcode "?dup", QDUP, TWODROP
+defcode "?dup",4,,QDUP
     checkunderflow 0
     lw t1, 0(sp)
     beqz t1, qdup_done
@@ -427,7 +422,7 @@ qdup_done:
     NEXT
 
 # abs ( n -- |n| )
-defcode "abs", ABS, QDUP
+defcode "abs",3,,ABS
     checkunderflow 0
     lw t1, 0(sp)
     srai t2, t1, 31             # all ones if negative
@@ -437,7 +432,7 @@ defcode "abs", ABS, QDUP
     NEXT
 
 # min ( a b -- a|b )    Signed
-defcode "min", MIN, ABS
+defcode "min",3,,MIN
     checkunderflow CELL
     POP t1                      # b
     lw t2, 0(sp)                # a
@@ -448,7 +443,7 @@ min_keep:
     NEXT
 
 # max ( a b -- a|b )    Signed
-defcode "max", MAX, MIN
+defcode "max",3,,MAX
     checkunderflow CELL
     POP t1                      # b
     lw t2, 0(sp)                # a
@@ -460,26 +455,26 @@ max_keep:
 
 # s0 ( -- a )           Address just above the data stack's first cell
 # depth is then:  : depth s0 sp@ - 2/ 2/ 1- ;
-defcode "s0", SZERO, MAX
+defcode "s0",2,,SZERO
     li t1, DSP_TOP
     PUSH t1
     NEXT
 
 # r0 ( -- a )           Address just above the return stack's first cell
-defcode "r0", RZERO, SZERO
+defcode "r0",2,,RZERO
     li t1, RSP_TOP
     PUSH t1
     NEXT
 
 # pad ( -- a )          Start of the 256-byte scratch area
-defcode "pad", PADADDR, RZERO
+defcode "pad",3,,PADADDR
     li t1, PAD
     PUSH t1
     NEXT
 
 # allot ( n -- )        Reserve n bytes at HERE. Bounds-checked like `,`.
 # Follow with  align  if n is not a multiple of 4: `,` traps on a misaligned HERE.
-defcode "allot", ALLOT, PADADDR
+defcode "allot",5,,ALLOT
     checkunderflow 0
     POP t1
     li t2, var_HERE
@@ -497,7 +492,7 @@ defcode "allot", ALLOT, PADADDR
 # key? ( -- f )         True if the console UART has a character waiting.
 # Looks at the hardware only: during the boot replay `key` is served from
 # the flash log instead, so do not call key or key? from replayed lines.
-defcode "key?", KEYQ, ALLOT
+defcode "key?",4,,KEYQ
     li t0, UART_BASE_ADDRESS
     lw t1, UART_RX_STATUS(t0)
     andi t1, t1, UART_RX_BIT
@@ -508,7 +503,7 @@ defcode "key?", KEYQ, ALLOT
 
 # litstring ( -- addr len )   Runtime of s": the thread holds a length cell, then
 # the bytes, padded to a cell boundary. Pushes the string and steps IP over it.
-defcode "litstring", LITSTRING, KEYQ
+defcode "litstring",9,,LITSTRING
     lw t1, 0(s1)                # length
     addi s1, s1, CELL           # IP -> first byte
     PUSH s1
@@ -534,7 +529,7 @@ defcode "litstring", LITSTRING, KEYQ
 ##
 
 # xdo ( limit index -- ; R: -- fudge index+fudge )
-defcode "xdo", XDO, LITSTRING
+defcode "xdo",3,,XDO
     checkunderflow CELL
     POP a2                      # index
     POP a1                      # limit
@@ -547,7 +542,7 @@ defcode "xdo", XDO, LITSTRING
 
 # xloop ( -- ; R: sys sys -- | sys sys )   Step by 1; the next cell is the
 # absolute branch target taken while looping
-defcode "xloop", XLOOP, XDO
+defcode "xloop",5,,XLOOP
     lw t1, 0(s0)                # biased index
     addi t2, t1, 1
     slt a1, t2, t1              # signed overflow of +1 <=> new < old
@@ -562,7 +557,7 @@ xloop_done:
 
 # xplusloop ( n -- ; R: sys sys -- | sys sys )   Step by n
 # signed add overflow <=> (new < old) != (n < 0)
-defcode "xplusloop", XPLUSLOOP, XLOOP
+defcode "xplusloop",9,,XPLUSLOOP
     checkunderflow 0
     POP a2                      # n
     lw t1, 0(s0)                # biased index
@@ -580,7 +575,7 @@ xploop_done:
     NEXT
 
 # i ( -- n ; R: sys sys -- sys sys )   Innermost loop index
-defcode "i", IDX, XPLUSLOOP
+defcode "i",1,,IDX
     lw t1, 0(s0)
     lw t2, CELL(s0)
     sub t1, t1, t2
@@ -588,7 +583,7 @@ defcode "i", IDX, XPLUSLOOP
     NEXT
 
 # j ( -- n )            Second loop index (the next loop out)
-defcode "j", JDX, IDX
+defcode "j",1,,JDX
     lw t1, 2*CELL(s0)
     lw t2, 3*CELL(s0)
     sub t1, t1, t2
@@ -596,7 +591,7 @@ defcode "j", JDX, IDX
     NEXT
 
 # unloop ( -- ; R: sys sys -- )   Drop the loop frame (needed before exit)
-defcode "unloop", UNLOOP, JDX
+defcode "unloop",6,,UNLOOP
     li t0, RSP_TOP-CELL         # need two cells on the return stack
     bge s0, t0, err_underflow
     addi s0, s0, 2*CELL
@@ -608,7 +603,7 @@ defcode "unloop", UNLOOP, JDX
 
 # parse-name ( -- addr len )   Next space-delimited token from the TIB, advancing
 # >in. len = 0 when the line is exhausted.
-defcode "parse-name", PARSENAME, UNLOOP
+defcode "parse-name",10,,PARSENAME
     li t2, TIB_BOTTOM
     li a4, var_TOIN
     lw a0, 0(a4)
@@ -627,7 +622,7 @@ defcode "parse-name", PARSENAME, UNLOOP
 # the delimiter that ended the previous token (TOIN points AT it here), so
 #   : ." 34 parse ... ; immediate
 # sees the text starting right after `." `, like ANS.
-defcode "parse", PARSE, PARSENAME
+defcode "parse",5,,PARSE
     checkunderflow 0
     POP a3                      # delimiter
     li t2, TIB_BOTTOM
@@ -665,7 +660,7 @@ parse_store:
 # interpreter's own lookup, a miss returns 0 instead of aborting. Hidden words
 # are skipped. The result is a header address: feed it to >cfa for the xt, or
 # read the flags with  4 + c@  (bit 7 = immediate).
-defcode "find-name", FINDNAME, PARSE
+defcode "find-name",9,,FINDNAME
     checkunderflow CELL
     POP a1                      # length
     POP a0                      # name address
@@ -703,7 +698,7 @@ fn_found:
 # the routine multiplies by the base before it checks the next character, so a
 # partial parse leaves a value that is ten times too large. An empty string is
 # reported as unparsed = 1.
-defcode "number", NUMBER, FINDNAME
+defcode "number",6,,NUMBER
     checkunderflow CELL
     POP a1                      # length
     POP a0                      # address
@@ -719,19 +714,19 @@ numw_push:
     NEXT
 
 # dovar ( -- code )     The code-field value that makes a word push its pfa
-defcode "dovar", DOVARW, NUMBER
+defcode "dovar",5,,DOVARW
     la t1, dovar_code
     PUSH t1
     NEXT
 
 # docon ( -- code )     The code-field value that makes a word push its cell
-defcode "docon", DOCONW, DOVARW
+defcode "docon",5,,DOCONW
     la t1, docon_code
     PUSH t1
     NEXT
 
 # docol ( -- code )     The code-field value of a colon definition
-defcode "docol", DOCOLW, DOCONW
+defcode "docol",5,,DOCOLW
     la t1, .addr
     PUSH t1
     NEXT
@@ -740,7 +735,7 @@ defcode "docol", DOCOLW, DOCONW
 # first data cell, after the code field and the DOES> slot) when executed.
 #   : variable create 0 , ;
 #   : constant create , docon latest @ >cfa ! ;
-defcode "create", CREATE, DOCOLW
+defcode "create",6,,CREATE
     li t2, TIB_BOTTOM
     li a4, var_TOIN
     lw a0, 0(a4)
@@ -768,7 +763,7 @@ defcode "create", CREATE, DOCOLW
 # code field at dodoes_code, records the action thread in the DOES> slot, then
 # returns from the defining word (the thread after it must not run now).
 #   : does> ' xdoes , ; immediate
-defcode "xdoes", XDOES, CREATE
+defcode "xdoes",5,,XDOES
     li a0, var_LATEST
     lw a0, 0(a0)                # header of the word CREATE just made
     call to_cfa                 # a0 = its code field (clobbers t0)
@@ -780,20 +775,20 @@ defcode "xdoes", XDOES, CREATE
 
 # ['] ( "name" -- cfa )   Immediate alias of the state-smart ': inside a colon
 # definition it compiles the next word's code field address as a literal.
-defcode "[']", BTICK, XDOES, F_IMMEDIATE
-    j body_TICK
+defcode "[']",3,F_IMMEDIATE,BTICK
+    j code_TICK
 
 ##
 # Leaving the interpreter
 ##
 
 # abort ( -- )          Print "?" and restart: stacks cleared, interpret state
-defcode "abort", ABORT, BTICK
+defcode "abort",5,,ABORT
     j err_error
 
 # quit ( -- )           Empty the return stack, interpret state, fresh line;
 # the data stack is left alone (ANS quit).
-defcode "quit", QUIT, ABORT
+defcode "quit",4,,QUIT
     li s0, RSP_TOP
     li t0, var_STATE
     sw zero, 0(t0)
