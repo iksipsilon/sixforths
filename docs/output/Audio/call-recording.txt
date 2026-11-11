@@ -1,0 +1,49 @@
+This is from conversation with Claude Sonnet:
+
+I need to be able to record longer calls, so we need to go the "Analog tap with two ADC channels" way, right?
+
+Yes, for long calls I’d go the analog tap way. The module route could be stretched by stopping and restarting AT+CREC every few minutes, but you’d lose audio during each restart and still get one direction at a time. The analog tap gives you gapless, two-channel recording that runs as long as the SD card has space.
+
+Numbers for the analog tap
+
+Data rate: At 8 kHz with 16-bit samples on two channels, that is 32 kB/s, or about 115 MB per hour. SPI to an SD card handles that easily.
+RAM: Two 512-byte sector buffers (about 1 KB of your 8 KB) are enough for double-buffering.
+Sampling: Drive the ADC from a timer at a fixed rate, scanning the two channels (DMA, if the CH32V006 supports it for this). Use two of PC4, PD2, PD3 or PD4.
+Bandwidth: If your calls use wideband “HD voice”, the audio goes up to about 7 kHz, so sample at 16 kHz instead. That doubles the rate to 64 kB/s, which is still easy.
+Things to get right
+
+Long-call safety: Don’t wait until hang-up to write the WAV header sizes. If power drops mid-call, the file is unreadable. Update the header every minute or so, or write a raw file and add the header afterwards.
+FAT32 limit: A single file tops out at 4 GB, which is about 35 hours at 32 kB/s, so that won’t matter.
+Filesystem code: A FAT driver on a 62 KB MCU is the biggest software piece. If you want to avoid it, you can pre-allocate one contiguous file and write raw sectors into it.
+Noise: Keep the tap wires short and reference the front end to the board’s analog ground.
+Do you want me to sketch the two-channel front end for the tap points on the NAU8810 board?
+
+I don have to tap the NAU8810 board, I have 3.5mm output I can tap there. 
+ would like to pre-allocate one contiguous file and write raw sectors into it. The OS on the MCU is FORTH so it doesnt have  a filesystem, just addresses. After writing a call in raw to the SD card with a header can I know from which number was it and the addresses of the call start and stop?
+
+Yes, you can know the call number and the start and stop addresses, if you build a small index into the card layout. The card won’t tell you any of that on its own. The jack is a fine tap point too, but check which jack pins carry EAR_P, EAR_N and MIC before wiring.
+
+I’m assuming an SDHC/SDXC card, which is addressed by 512-byte sector numbers (32-bit). Plain SDSC cards use byte addresses, so check your card type.
+
+Suggested layout
+
+Card header (sector 0): magic number, format version, call counter, and the next free sector.
+Index (sectors 1-N): one 16-byte entry per call with the call number, start sector, length in sectors, and a flag for recording or complete. That is 32 entries per sector.
+Call data: an append-only log. Each call starts at the “next free sector” from the card header. The call’s first sector holds a header with the call number, sample rate, channel count and bit depth. The audio follows.
+Start and stop
+
+At call start: increment the counter, write an index entry with length 0, then stream data.
+At call end: write the final length into the index entry and update “next free sector”.
+Stop address: it is simply start + length.
+Surviving power loss mid-call
+Reserve the last 8 bytes of every data sector for the call number and a running sector count. That leaves 504 bytes of audio per sector, which is 126 two-channel 16-bit frames, so it divides evenly. After a crash, you recover the end of a call by binary-searching those footers.
+
+Writing
+
+Streaming: Use multi-block write (CMD25) and keep the stream open.
+Index updates: Stop the stream briefly if you need to update the index mid-call.
+Capacity: At 32 kB/s you use 64 sectors per second, so one hour is about 230,000 sectors.
+Reading back on a PC
+
+Dump the card raw: A small script can strip the footers and put a normal WAV header on each call.
+Don’t let the OS format it: Windows will offer to format the unrecognised card. Decline, or use a raw-read tool.

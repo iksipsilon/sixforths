@@ -1,0 +1,48 @@
+AT+CPIN?			# check the SIM state, if +CPIN: READY   (SIM unlocked)
+					# if +CPIN: SIM PIN you need to enter the pin as below
+AT+CPIN="1234"		# Replace 1234 with your real PIN, and keep the quotes. 
+					# You should get OK, and AT+CPIN? should then show +CPIN: READY 
+
+# you can disable the PIN lock:
+AT+CLCK="SC",0,"1234"
+
+# To turn it back on later, use:
+AT+CLCK="SC",1,"1234"
+
+WAIT=3 				# wait 3 seconds
+
+
+
+# The network registration can take 5 to 20 seconds, so check 
+# AT+CREG? and AT+CEREG? afterwards.
+AT+CREG?        -> 0,1 or 0,5     (registered)
+AT+CEREG?       -> 0,1 or 0,5     (LTE registered)
+
+
+AT+CSDVC=3      -> route audio to the headphone/speaker jack
+AT+CLVL=5       -> speaker volume
+AT+CMIC=0,5     -> mic gain (optional)
+
+
+ATD+385914828080; 	# make a call
+ATA					# answer a call
+AT+CHUP				# hang up
+
+
+
+	PHONEBOOK ON SIM
+
+AT+CPBW				# to write a phonebook entry to a SIM card
+					
+# AT+CPBW=<index>,<number>,<type>,<text>   
+# <index>: The memory location number (e.g., 1, 2).
+# <number>: The phone number string.
+# <type>: The type of number (e.g., 129 for international).
+# <text>: The contact name in text format.
+
+# Example:
+# AT+CPBW=1,"+1234567890",129,"John Doe"
+
+# Note that not all manufacturers implement the full AT+CPBW command set; some may require 
+# AT+CPBS to select the storage area (e.g., SIM vs. Phone memory) before writing.
+

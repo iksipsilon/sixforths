@@ -1,0 +1,4 @@
+The Waveshare A7670E Cat-1 HAT (the devboard that I am using) has onboard NAU8810 for audio 
+and a 3.5mm output jack for earbuds and microphone. I am going to tap the 3.5mm audio to
+amplify the signal to 2-3 Watts (for the speaker) with 8002 or TDA2822 ICs, and send it to
+CH32V006 ADC to record the calls on SD card via SPI.
