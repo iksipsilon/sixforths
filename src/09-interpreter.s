@@ -14,8 +14,13 @@ interpreter_start:
 interpreter:
     call uart_get                               # read a character from UART
     li a5, CHAR_NEWLINE                         # load newline into temporary
-    beq a0, a5, skip_send                       # don't send the character if it's a newline
+    bne a0, a5, interpreter_char                # not a newline: filter and echo it below
+    # CH32V006 PORT: echo the newline too, so the line's output (and "ok")
+    # starts on the next line instead of right after the input
+    call uart_put                               # send the newline to UART
+    j skip_send
 
+interpreter_char:
     # ignore specific characters
     beqz a0, interpreter                        # ignore the character if it matches
     li a5, CHAR_CARRIAGE                        # load 0x0D carriage return into temporary

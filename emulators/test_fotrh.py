@@ -62,7 +62,7 @@ def t(name, src, *expect, absent=("  ?",)):
     return out
 
 # ---- kernel primitives, via the prelude's number output ----
-t("emit (no leading space)", "65 emit", "65 emitA", absent=("65 emit A",))
+t("emit (no leading space)", "65 emit", "65 emit\nA", absent=("65 emit\n A",))
 t("mul", "6 7 * .", "42 ")
 t("mul negative", "-6 7 * .", "-42 ")
 t("um* 10^6 * 10^6", "1000000 1000000 um* u. u.", "232 3567587328 ")
@@ -189,7 +189,7 @@ check("log: lines appended (the newline became a space)", e, repr(logbytes(e)),
       [repr(b"+log \n: sq dup * ; \n")])
 r = h.boot(flash=bytes(e.f))                     # simulated reset
 out, _ = h.feed(r, "3 sq 48 + emit\n")
-check("log: replay after reset brings the word back", r, out, ["emit9"])
+check("log: replay after reset brings the word back", r, out, ["emit\n9"])
 e = copy.deepcopy(B0)
 h.feed(e, "+log\n: tw\n2 *\n;\n: bad\nnosuchword\n")
 check("log: a definition is logged whole, a failed one not at all", e, repr(logbytes(e)),
@@ -227,10 +227,10 @@ e = h.Emu(bytes(img), b"")
 e.weact_bridge = True
 h.run_idle(e, 100_000)
 out, _ = h.feed(e, "3 sq 48 + emit\n")
-check("log: replay runs with PD4 tied to PD5 (WeAct SB3/SB4)", e, out, ["emit9"])
+check("log: replay runs with PD4 tied to PD5 (WeAct SB3/SB4)", e, out, ["emit\n9"])
 h.feed(e, "reboot\n")                            # software reboot: PD5 is TX right now
 out, _ = h.feed(e, "3 sq 48 + emit\n")
-check("log: ... and after a software reboot", e, out, ["emit9"])
+check("log: ... and after a software reboot", e, out, ["emit\n9"])
 # emulator guards: the FPEC model must reject what the V006 cannot do
 e = copy.deepcopy(B0)                            # boot unlocked the FPEC
 e.f[LOG0] = 0x00                                 # page 0x4000 is not erased
@@ -254,7 +254,7 @@ check("emulator: halfword flash writes fault", e, f"fault={f}", ["flash-write16"
 
 # ---- words ----
 e, out, _ = h.session(P, "words\n")
-names = out.split("\n")[0].split()
+names = out.split("\n")[1].split()                # line 0 is the echoed input
 print("word count:", len(names))
 check("words lists new primitives", e, out, ["um/mod", "xdoes", "find-name", "parse", "um*", "quit"])
 

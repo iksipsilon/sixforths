@@ -74,7 +74,7 @@ hardware.
 
 - Flash 0x00000000: kernel + `.rodata`, **must stay under 16 KiB** (`FLASH` `LENGTH` in
   `src/board/ch32v006f8u6/linker.ld`; confirm it says 16k).
-  Currently 8,792 bytes. Report the size after every change.
+  Currently 8,804 bytes. Report the size after every change.
 - Flash 0x08004000-0x08006800: source-replay log (10 KiB). Space above that is
   reserved for the phonebook / SMS storage. Do not touch it casually.
 - RAM 0x20000000: the user dictionary grows up from here (`HERE`).
@@ -91,7 +91,9 @@ hardware.
   Never put them inside names or strings. A trailing `\ comment` merges the next line,
   so write comments on lines of their own.
 - The TIB is 256 bytes: keep every source line under 250 characters.
-- CR is ignored; ANSI escape sequences are swallowed; BS / DEL are handled.
+- CR is ignored; ANSI escape sequences are swallowed; BS / DEL are handled. The LF that
+  ends a line is echoed, so its output and `ok` start on the next line (tests expect
+  e.g. `"65 emit\nA"`). A `\` comment swallows its LF without echo (the line merges).
 - The interpreter does not read UART while it processes a line (the receiver holds
   only 1-2 bytes). Anything that feeds the board automatically must wait for the echo
   or prompt after each line.
