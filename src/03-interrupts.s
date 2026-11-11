@@ -6,10 +6,11 @@
 .global interrupt_handler
 .type interrupt_handler, @function
 # CH32V006 PORT: two changes here.
-# 1) Traps enter at 0x0, like reset: the QingKe V2 manual (section 2.2 and
-#    the mtvec table) requires a 1 KiB-aligned trap base, and 0x0 is one.
-#    _start (sixforths.s) sends a non-zero mcause here, so the handler itself
-#    needs no alignment (a .balign 1024 here used to cost ~1.6 KB of padding).
+# 1) Traps go through the vector table at 0x0 (sixforths.s): the QingKe V2
+#    manual (section 2.2 and the mtvec table) requires a 1 KiB-aligned
+#    table, and 0x0 is one. The table holds this handler's address, so the
+#    handler itself needs no alignment (a .balign 1024 here used to cost
+#    ~1.6 KB of padding).
 # 2) Instead of a bare mret, the handler is a forensic beacon: it prints 'T'
 #    followed by mcause and mepc in hex over the UART, then hangs with all
 #    state intact for the debugger. If a trap fires, the terminal says why.
@@ -65,8 +66,9 @@ interrupt_init:
     # before mtvec below is even set.
 
     # set interrupt handler jump address
-    # (CH32V006 PORT: mtvec = 0, unified entry (mtvec[1:0] = 00) at 0x0,
-    # where _start passes traps on to interrupt_handler; see sixforths.s)
-    csrw mtvec, zero    # mtvec = 0x305
+    # (CH32V006 PORT: mtvec = 0x0 | 3: vector table at 0x0, see sixforths.s;
+    # MODE0 = 1: entry at base + number*4, MODE1 = 1: entries are addresses)
+    li t0, 3
+    csrw mtvec, t0      # mtvec = 0x305
 
     ret

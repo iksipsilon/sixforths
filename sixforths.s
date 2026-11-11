@@ -31,17 +31,23 @@ Copyright (c) 2021~ Alexander Williams, https://a1w.ca
 # tp = scratch (was t6)
 
 # Ensure the _start entry label is defined first
-# CH32V006 PORT: reset and traps share this entry. The QingKe V2 needs a
-# 1 KiB-aligned trap base (mtvec); 0x0 is one, so mtvec = 0 (its reset value)
-# and no alignment padding is needed. mcause is 0 after every reset, and no
-# trap has cause 0 (instruction misalignment cannot happen with the C
-# extension), so a non-zero mcause here means a trap.
+# CH32V006 PORT: a vector table at 0x0, as in WCH's startup code. Reset
+# always starts at 0x0; mtvec = 0x0 | 3 (vectored, entries are addresses)
+# sends an NMI to entry 2 and every exception to entry 3 (EXC). The QingKe V2
+# needs the table 1 KiB aligned, and 0x0 is. Only entries 0-3 exist: enabling
+# any interrupt needs a longer table. Never tell reset from a trap by mcause:
+# on silicon it is not 0 after reset (the board read 0x800000D9).
 .text
 .global _start
 _start:
-    csrr t0, mcause                 # 0 after reset, non-zero after a trap
-    bnez t0, interrupt_handler      # trap: print T<mcause> <mepc> and hang
-    j boot
+.option push
+.option norvc                       # entry 0 must be a 4-byte jump,
+.option norelax                     # and the linker must not shorten it
+    j boot                          # 0x00: reset
+    .word 0                         # 0x04: vector 1, reserved
+    .word interrupt_handler         # 0x08: vector 2, NMI
+    .word interrupt_handler         # 0x0C: vector 3, EXC (all exceptions)
+.option pop
 
 # include board-specific functions and constants from src/boards/<board>/
 .include "board.s"

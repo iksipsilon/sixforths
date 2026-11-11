@@ -154,10 +154,20 @@ check("key? empty", e, out, ["0 "])
 e, out, _ = h.session(P, "key? .\n65 emit\n")
 check("key? pending", e, out, ["-1 ", "A"])
 
-# ---- trap entry: reset and traps share 0x0; _start sends mcause != 0 to the beacon ----
-check("mtvec = 0 after boot", B0, f"mtvec={B0.csr.get(0x305)};", ["mtvec=0;"])
+# ---- vector table at 0x0: reset -> boot, exceptions -> entry 3 -> beacon ----
+check("mtvec = 3 after boot", B0, f"mtvec={B0.csr.get(0x305)};", ["mtvec=3;"])
+FLASH = open(h.BIN, "rb").read()
+vec = lambda n: int.from_bytes(FLASH[4 * n:4 * n + 4], "little")
+hdl = h.SYM["interrupt_handler"]
+check("vectors 2 and 3 point to the handler", B0,
+      f"nmi={vec(2):#x} exc={vec(3):#x}", [f"nmi={hdl:#x}", f"exc={hdl:#x}"])
+# regression: on silicon mcause is not 0 after reset (the board read 0x800000D9)
+e = h.Emu(FLASH, b"")
+e.csr[0x342] = 0x800000D9
+h.run_idle(e, 100_000)                    # boot needs ~8,200 steps
+check("reset boots even with mcause != 0", e, bytes(e.uart_out).decode("latin1"), ["sixforths v0.0"])
 e = copy.deepcopy(B0)
-e.csr[0x342], e.csr[0x341], e.pc = 4, 0x1234, 0   # as if a misaligned load trapped at 0x1234
+e.csr[0x342], e.csr[0x341], e.pc = 4, 0x1234, vec(3)   # hardware: misaligned load at 0x1234
 start = len(e.uart_out)
 try:
     for _ in range(20000):
@@ -168,7 +178,7 @@ except RuntimeError:
     pass
 out = bytes(e.uart_out[start:]).decode("latin1")
 out += " [hang]" if e.pc == h.SYM["beacon_hang"] else " [no hang]"
-check("trap at 0x0 prints the beacon", e, out, ["T00000004 00001234 ", "[hang]"])
+check("exception via vector 3 prints the beacon", e, out, ["T00000004 00001234 ", "[hang]"])
 
 # ---- words ----
 e, out, _ = h.session(P, "words\n")
