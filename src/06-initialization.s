@@ -13,7 +13,19 @@ boot:
 
     call interrupt_init # RISC-V interrupt CSR initialization
     call uart_init      # board specific UART initialization
-    call gpio_init      # board specific GPIO initialization
+    call gpio_init      # board specific GPIO initialization (a0 = skip button)
+
+    # arm the boot replay unless the skip button (PD4 high) is held:
+    # LOGSRC = -1 means "armed"; the first pass through reset: turns it into
+    # LOG_BASE and the replay begins. Holding PD4 boots to a bare ok prompt,
+    # the escape hatch for a log whose last line starts a broken main loop.
+    # (CH32V006 PORT: gpio_init samples PD4 before PD5 becomes the UART TX)
+    li t2, -1
+    beqz a0, boot_arm
+    mv t2, zero         # button held: no replay this boot
+boot_arm:
+    li t0, LOGSRC
+    sw t2, 0(t0)
 
     # initialize HERE variable
     li t0, RAM_BASE     # load RAM_BASE memory address
@@ -35,20 +47,6 @@ boot:
     sw zero, 0(t0)      # logging starts disabled (+log enables it)
     li t0, LOGPND
     sw zero, 0(t0)      # no pending batch
-
-    # arm the boot replay unless the skip button (PD4 high) is held:
-    # LOGSRC = -1 means "armed"; the first pass through reset: turns it into
-    # LOG_BASE and the replay begins. Holding PD4 boots to a bare ok prompt,
-    # the escape hatch for a log whose last line starts a broken main loop.
-    li t2, -1
-    li t0, GPIOD_BASE
-    lw t1, GPIOD_INDR(t0)
-    andi t1, t1, LOG_SKIP_BIT
-    beqz t1, boot_arm
-    mv t2, zero         # button held: no replay this boot
-boot_arm:
-    li t0, LOGSRC
-    sw t2, 0(t0)
 
     # display boot message
     la a1, msg_boot     # load string message

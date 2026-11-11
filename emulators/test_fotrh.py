@@ -221,6 +221,16 @@ out, _ = h.feed(e, "+log\n: sq dup * ;\n1 drop\n")
 tail = bytes(e.f[LOG0 + LOGN - 8:LOG0 + LOGN])
 check("log: a full log turns logging off", e, out + f" tail={tail!r}",
       ["? log off", repr(b"+log \n\xff\xff")])
+# WeAct board: closed SB3/SB4 join PD4 to PD5; the replay must still run
+img = bytearray(FLASH) + bytearray([0xFF] * (LOG0 - len(FLASH))) + b": sq dup * ; \n"
+e = h.Emu(bytes(img), b"")
+e.weact_bridge = True
+h.run_idle(e, 100_000)
+out, _ = h.feed(e, "3 sq 48 + emit\n")
+check("log: replay runs with PD4 tied to PD5 (WeAct SB3/SB4)", e, out, ["emit9"])
+h.feed(e, "reboot\n")                            # software reboot: PD5 is TX right now
+out, _ = h.feed(e, "3 sq 48 + emit\n")
+check("log: ... and after a software reboot", e, out, ["emit9"])
 # emulator guards: the FPEC model must reject what the V006 cannot do
 e = copy.deepcopy(B0)                            # boot unlocked the FPEC
 e.f[LOG0] = 0x00                                 # page 0x4000 is not erased

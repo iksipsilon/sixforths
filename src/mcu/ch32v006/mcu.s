@@ -63,7 +63,9 @@
 # PD4 is configured as an input with pull-down; holding it HIGH (button to
 # 3V3) during reset skips the source-replay and boots to a bare ok prompt.
 # Active-high so that an unwired pin (and the emulator's all-zero GPIO
-# reads) means "replay normally".
+# reads) means "replay normally". gpio_init samples it before PD5 becomes
+# the UART TX: on the WeAct board the closed solder bridges SB3/SB4 join
+# PD4 to PD5, and the idle-high TX would read as a held button.
 ##
 .equ GPIOD_BASE, 0x40011400
 .equ GPIOD_INDR, 0x08           # input data register offset
@@ -130,9 +132,30 @@ uart_done:
 # Initialize the GPIO
 # (CH32V006 PORT: USART1 default mapping is TX = PD5, RX = PD6, i.e. port D
 # CFGLR nibbles 5 and 6, instead of the GD32V's PA9/PA10 in CTL1)
+# returns: a0 = replay-skip button (0 = released, LOG_SKIP_BIT = held)
 gpio_init:
     li t0, 0x40011400                       # load base address of GPIOD
     lw t1, 0x00(t0)                         # load value from the Port config register low (GPIOD_CFGLR)
+
+    # CH32V006 PORT: sample the replay-skip button (PD4) while PD5 is not yet
+    # the UART TX: on the WeAct board the closed solder bridges SB3/SB4 join
+    # PD4 to PD5 (through USB D-, 33 R + 1.5 k), so the idle-high TX would
+    # read as a held button. PD4: MODE4 = 00 (input), CNF4 = 10 (input with
+    # pull-up/pull-down) -> nibble 0b1000; OUTDR bit 4 is 0 at reset =
+    # pull-down, so the pin reads 0 unless the button pulls it to 3V3.
+    # PD5: floating input (0b0100) for the sample, also after a software
+    # reboot, where it is still the TX pin.
+    li t2, ~((0xf << (4*4)) | (0xf << (4*5)))
+    and t1, t1, t2                          # clear the pin 4 and pin 5 bits
+    li t2, (0b1000 << (4*4)) | (0b0100 << (4*5))
+    or t1, t1, t2                           # PD4 pulled down, PD5 released
+    sw t1, 0x00(t0)                         # store the value in GPIOD_CFGLR
+    li t2, 1024                             # let PD4 settle (~0.15 ms)
+gpio_settle:
+    addi t2, t2, -1
+    bnez t2, gpio_settle
+    lw a0, GPIOD_INDR(t0)                   # read the port D inputs
+    andi a0, a0, LOG_SKIP_BIT               # keep the button (PD4)
 
     # configure TX on pin 5 of port D: MODE5 = 01 (output 10 MHz), CNF5 = 10
     # (alternate function push-pull) -> nibble 0b1001
@@ -147,15 +170,6 @@ gpio_init:
     and t1, t1, t2                          # clear MODE6[1:0], CNF6[1:0]
     li t2, (0b0100 << (4*6))                # floating input
     or t1, t1, t2                           # set the pin 6 bits
-
-    # CH32V006 PORT: configure the replay-skip button on pin 4 of port D:
-    # MODE4 = 00 (input), CNF4 = 10 (input with pull-up/pull-down) -> nibble
-    # 0b1000. OUTDR bit 4 selects the pull direction and is 0 at reset =
-    # pull-down, so the pin reads 0 unless the button pulls it to 3V3.
-    li t2, ~(0xf << (4*4))                  # load bitmask to clear the 4 config bits of pin 4
-    and t1, t1, t2                          # clear MODE4[1:0], CNF4[1:0]
-    li t2, (0b1000 << (4*4))                # input with pull-up/pull-down
-    or t1, t1, t2                           # set the pin 4 bits
 
     sw t1, 0x00(t0)                         # store the value in the Port config register (GPIOD_CFGLR)
 
