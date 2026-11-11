@@ -221,6 +221,19 @@ out, _ = h.feed(e, "+log\n: sq dup * ;\n1 drop\n")
 tail = bytes(e.f[LOG0 + LOGN - 8:LOG0 + LOGN])
 check("log: a full log turns logging off", e, out + f" tail={tail!r}",
       ["? log off", repr(b"+log \n\xff\xff")])
+# the end of the replay: no extra empty line and "ok" after a whole last line,
+# none for an empty log, but a partial last line (power cut) is still closed
+img = bytearray(FLASH) + bytearray([0xFF] * (LOG0 - len(FLASH)))
+for log, expect, absent in ((b": sq dup * ; \n", ": sq dup * ; \n   ok\n", "ok\n\n"),
+                            (b"", "sixforths v0.0\n\n", "ok"),
+                            (b": sq dup * ;", ": sq dup * ;\n   ok\n", "")):
+    e = h.Emu(bytes(img + log), b"")
+    h.run_idle(e, 100_000)
+    boot = bytes(e.uart_out).decode("latin1")
+    out, _ = h.feed(e, "3 sq 48 + emit\n")
+    want = [expect] + (["emit\n9"] if log else [])
+    check(f"log: replay end, log {log!r}", e, boot + out, want,
+          absent=(absent,) if absent else ())
 # WeAct board: closed SB3/SB4 join PD4 to PD5; the replay must still run
 img = bytearray(FLASH) + bytearray([0xFF] * (LOG0 - len(FLASH))) + b": sq dup * ; \n"
 e = h.Emu(bytes(img), b"")

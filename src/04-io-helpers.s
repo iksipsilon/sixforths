@@ -8,25 +8,34 @@ uart_get:
     # there instead of the USART; the interpreter cannot tell the
     # difference (replayed source even echoes, so the boot transcript shows
     # exactly what was replayed). The first 0xFF byte (erased flash) or the
-    # end of the region switches the source back to the UART permanently,
-    # injecting one final newline so a partially-written last line (e.g.
-    # power loss mid-append) can never leave the TIB half-filled.
+    # end of the region switches the source back to the UART permanently.
+    # If the log does not end with a newline (a partially-written last line,
+    # e.g. power loss mid-append), one final newline is injected so it can
+    # never leave the TIB half-filled; otherwise nothing is injected, so the
+    # replay leaves no extra empty line and "ok" behind.
     # Clobbers only t0/t1 beyond the original code: interpreter loop state
     # (t2 = TIB, a1 = TOIN pointer, a4) stays intact across calls.
     li t0, LOGSRC
     lw t1, 0(t0)
     beqz t1, uart_get_hw        # 0: normal UART input
     li a0, LOG_TOP
-    bgeu t1, a0, uart_get_off   # ran off the end of the log region
+    bgeu t1, a0, uart_get_end   # ran off the end of the log region
     lbu a0, 0(t1)               # read one byte of replayed source
+    xori a0, a0, 0xFF           # a0 = 0 iff the byte is 0xFF (erased)
+    beqz a0, uart_get_end       # erased flash: end of the log
+    xori a0, a0, 0xFF           # restore the byte
     addi t1, t1, 1
     sw t1, 0(t0)                # advance the replay pointer
-    li t1, 0xFF
-    beq a0, t1, uart_get_off    # erased flash: end of the log
     ret
-uart_get_off:
+uart_get_end:
+    # t1 = first address not replayed (the end marker, or LOG_TOP)
     sw zero, 0(t0)              # replay done: all input from the UART now
-    li a0, CHAR_NEWLINE         # close any open line
+    li a0, LOG_BASE
+    beq t1, a0, uart_get_hw     # empty log: nothing to close
+    lbu a0, -1(t1)              # the last replayed byte
+    li t1, CHAR_NEWLINE
+    beq a0, t1, uart_get_hw     # the log ends with a whole line: on to the UART
+    li a0, CHAR_NEWLINE         # partial last line: close it
     ret
 uart_get_hw:
     li t0, UART_BASE_ADDRESS  # load UART base address (CH32V006 PORT: USART1, defined in mcu.s)
