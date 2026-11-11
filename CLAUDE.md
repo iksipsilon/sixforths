@@ -57,7 +57,7 @@ hardware.
 
 - Flash 0x00000000: kernel + `.rodata`, **must stay under 16 KiB** (`FLASH` `LENGTH` in
   `src/board/ch32v006f8u6/linker.ld`; confirm it says 16k).
-  Currently 10,684 bytes. Report the size after every change.
+  Currently 10,680 bytes. Report the size after every change.
 - Flash 0x08004000-0x08006800: source-replay log (10 KiB). Space above that is
   reserved for the phonebook / SMS storage. Do not touch it casually.
 - RAM 0x20000000: the user dictionary grows up from here (`HERE`).

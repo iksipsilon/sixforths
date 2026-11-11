@@ -29,7 +29,7 @@ def check(name, e, out, expect, absent=()):
 
 t0 = time.time()
 B0 = h.boot()
-print("boot banner ok:", "FiveForths" in bytes(B0.uart_out).decode("latin1"), "fault:", B0.fault)
+print("boot banner ok:", "sixforths v0.0" in bytes(B0.uart_out).decode("latin1"), "fault:", B0.fault)
 
 # ---- load the prelude line by line, flag any '?' ----
 lines = [l for l in open(os.path.join(HERE, "..", "prelude.f")).read().split("\n")]

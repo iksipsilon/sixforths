@@ -52,7 +52,7 @@ boot_arm:
 
     # display boot message
     la a1, msg_boot     # load string message
-    addi a2, a1, 74     # load string length
+    addi a2, a1, 16     # load string length
     call uart_print     # call uart print function
     j reset
 
@@ -124,4 +124,4 @@ tib_zerofill:
 tib_done:
     j interpreter_start # jump to the main interpreter REPL
 
-msg_boot: .ascii "FiveForths v0.5, Copyright (c) 2021~ Alexander Williams, https://a1w.ca \n\n"
+msg_boot: .ascii "sixforths v0.0\n\n"
