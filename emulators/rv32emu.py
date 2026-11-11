@@ -22,13 +22,20 @@ class Emu:
         self.trace = []          # ring buffer of (pc, instr_word)
         self.stores = []         # ring of (pc, addr, val)
         self.fault = None
-        # FPEC (flash controller) model: KEYR/MODEKEYR unlock sequences,
-        # standard halfword programming (PG, AND-semantics like real flash),
-        # fast 64-byte page erase (FTER+STRT). Wrong sequences fault, so the
-        # emulator catches a botched unlock dance the way it caught the
-        # alignment traps.
+        # FPEC (flash controller) model, CH32V006 (reference manual V1.5,
+        # chapter 18): KEYR/MODEKEYR unlock sequences, fast 256-byte page
+        # erase (FTER + STRT) and fast 256-byte page programming (FTPG:
+        # BUFRST, 64 x (word store + BUFLOAD), FLASH_ADDR, STRT). Halfword
+        # programming (PG) faults: it reportedly corrupts neighbouring
+        # halfwords on V006 silicon. Programming a page that is not erased
+        # faults too (erase first). Wrong sequences fault, so the emulator
+        # catches a botched flash dance the way it catches alignment traps.
         self.fpec = {'lock': True, 'flock': True, 'ctlr': 0, 'faddr': 0,
-                     'kstage': 0, 'mkstage': 0}
+                     'kstage': 0, 'mkstage': 0,
+                     'buf': None,       # 256-byte page buffer after BUFRST
+                     'loaded': set(),   # word offsets loaded since BUFRST
+                     'bufpage': None,   # page the loaded words belong to
+                     'latch': None}     # (page offset, word) awaiting BUFLOAD
         self.gpiod_in = 0        # GPIOD input pins (bit 4 = replay-skip button)
 
     def _flash_pa(self, a):
@@ -96,16 +103,53 @@ class Emu:
             self.fpec['faddr'] = v & M32
             return
         if a == 0x40022010:  # FLASH_CTLR
-            self.fpec['ctlr'] = v & M32
+            v &= M32
+            fp = self.fpec
+            # BUFRST, BUFLOAD and STRT act once and read back as 0
+            fp['ctlr'] = v & ~((1 << 19) | (1 << 18) | (1 << 6))
+            if v & 1:                            # PG: not on the V006
+                self.fault = ("flash-pg", self.pc, v); raise RuntimeError()
+            ftpg, fter = (v >> 16) & 1, (v >> 17) & 1
+            if (ftpg or fter) and (fp['lock'] or fp['flock']):
+                self.fault = ("flash-locked", self.pc, v); raise RuntimeError()
+            if (v >> 19) & 1:                    # BUFRST: clear the page buffer
+                if not ftpg:
+                    self.fault = ("flash-bufrst-no-ftpg", self.pc, v); raise RuntimeError()
+                fp['buf'] = bytearray([0xFF] * 256)
+                fp['loaded'], fp['bufpage'], fp['latch'] = set(), None, None
+            if (v >> 18) & 1:                    # BUFLOAD: latched word -> buffer
+                if not ftpg or fp['buf'] is None or fp['latch'] is None:
+                    self.fault = ("flash-bufload-seq", self.pc, v); raise RuntimeError()
+                off, word = fp['latch']
+                fp['buf'][off:off+4] = word.to_bytes(4, "little")
+                fp['loaded'].add(off); fp['latch'] = None
             if (v >> 6) & 1:                     # STRT
-                if not ((v >> 17) & 1):          # only FTER modeled
+                pa = self._flash_pa(fp['faddr'])
+                if pa is None or (pa & 255):
+                    self.fault = ("flash-page-addr", self.pc, fp['faddr']); raise RuntimeError()
+                if fter and not ftpg:            # erase one 256-byte page
+                    for i in range(256): self.f[pa+i] = 0xFF
+                elif ftpg and not fter:          # program one 256-byte page
+                    if fp['buf'] is None or len(fp['loaded']) != 64 or fp['bufpage'] != pa:
+                        self.fault = ("flash-ftpg-buffer", self.pc, pa); raise RuntimeError()
+                    if any(self.f[pa+i] != 0xFF for i in range(256)):
+                        self.fault = ("flash-ftpg-not-erased", self.pc, pa); raise RuntimeError()
+                    self.f[pa:pa+256] = fp['buf']
+                    fp['buf'] = None
+                else:
                     self.fault = ("flash-strt-mode", self.pc, v); raise RuntimeError()
-                if self.fpec['lock'] or self.fpec['flock']:
-                    self.fault = ("flash-locked-erase", self.pc, v); raise RuntimeError()
-                pa = self._flash_pa(self.fpec['faddr'])
-                if pa is None or (pa & 63):
-                    self.fault = ("flash-erase-addr", self.pc, self.fpec['faddr']); raise RuntimeError()
-                for i in range(64): self.f[pa+i] = 0xFF
+            return
+        pa = self._flash_pa(a)
+        if pa is not None:
+            # a word store into flash only latches data for the FTPG buffer
+            fp = self.fpec
+            if not (fp['ctlr'] >> 16) & 1 or fp['buf'] is None or fp['latch'] is not None:
+                self.fault = ("flash-write-no-ftpg", self.pc, a); raise RuntimeError()
+            page = pa & ~255
+            if fp['bufpage'] is None: fp['bufpage'] = page
+            if page != fp['bufpage']:
+                self.fault = ("flash-ftpg-page-mix", self.pc, a); raise RuntimeError()
+            fp['latch'] = (pa & 255, v & M32)
             return
         for i in range(4): self.w8(a+i, (v >> (8*i)) & 0xFF)
     def w16(self, a, v):
@@ -113,14 +157,8 @@ class Emu:
             self.fault = ("misaligned-store16", self.pc, a); raise RuntimeError()
         pa = self._flash_pa(a)
         if pa is not None:
-            # halfword store into flash = standard programming operation
-            if (self.fpec['ctlr'] & 1) and not self.fpec['lock']:
-                # real flash can only clear bits: AND semantics
-                self.f[pa]   &= v & 0xFF
-                self.f[pa+1] &= (v >> 8) & 0xFF
-                self.stores.append((self.pc, a, v & 0xFFFF)); self.stores = self.stores[-16:]
-                return
-            self.fault = ("flash-write-no-pg", self.pc, a); raise RuntimeError()
+            # halfword store into flash = standard (PG) programming: not on the V006
+            self.fault = ("flash-write16", self.pc, a); raise RuntimeError()
         for i in range(2): self.w8(a+i, (v >> (8*i)) & 0xFF)
 
     def wr(self, rd, v):

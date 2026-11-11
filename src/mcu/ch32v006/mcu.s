@@ -36,24 +36,27 @@
 
 ##
 # FPEC (flash controller) - CH32V006 PORT, for the source-replay log
-# Register map per the CH32V00x TRM, cross-checked against ch32fun.
-# Standard programming (PG) writes one halfword; fast erase (FTER) erases a
-# 64-byte page and requires the MODEKEYR unlock on top of KEYR.
-# VERIFY ON SILICON: halfword PG and 64 B FTER are documented for the
-# CH32V003 lineage; confirm both against the V006 TRM on first hardware test.
+# Per the CH32V00x reference manual V1.5, chapter 18. The V006 fast page is
+# 256 bytes (the CH32V003's is 64): fast erase (FTER) and fast programming
+# (FTPG, through a 256-byte page buffer) both work on whole pages and need
+# the MODEKEYR unlock on top of KEYR. Standard halfword programming (PG) is
+# not used: it reportedly corrupts neighbouring halfwords on V006 silicon.
 ##
 .equ FLASH_R_BASE, 0x40022000   # FPEC register base (ACTLR at +0x00 is used in uart_init)
 .equ FLASH_KEYR, 0x04           # KEYR: unlock CTLR (KEY1 then KEY2)
 .equ FLASH_STATR, 0x0C          # STATR: BSY in bit 0
-.equ FLASH_CTLR, 0x10           # CTLR: PG, STRT, FTER...
-.equ FLASH_ADDR, 0x14           # ADDR: page address for erase
-.equ FLASH_MODEKEYR, 0x24       # MODEKEYR: unlock the fast (64 B page) modes
+.equ FLASH_CTLR, 0x10           # CTLR: STRT, FTPG, FTER, BUFLOAD, BUFRST
+.equ FLASH_ADDR, 0x14           # ADDR: page address for erase / programming
+.equ FLASH_MODEKEYR, 0x24       # MODEKEYR: unlock the fast (page) modes
 .equ FLASH_KEY1, 0x45670123
 .equ FLASH_KEY2, 0xCDEF89AB
-.equ FLASH_CTLR_PG, (1 << 0)    # standard (halfword) programming mode
-.equ FLASH_CTLR_STRT, (1 << 6)  # start an erase
-.equ FLASH_CTLR_FTER, (1 << 17) # fast 64-byte page erase mode
+.equ FLASH_CTLR_STRT, (1 << 6)  # start an erase or a page programming
+.equ FLASH_CTLR_FTPG, (1 << 16) # fast page programming mode
+.equ FLASH_CTLR_FTER, (1 << 17) # fast page erase mode
+.equ FLASH_CTLR_BUFLOAD, (1 << 18) # load the latched word into the page buffer
+.equ FLASH_CTLR_BUFRST, (1 << 19)  # clear the page buffer
 .equ FLASH_STATR_BSY, (1 << 0)  # operation in progress
+.equ FLASH_PAGE, 256            # fast page size in bytes
 
 ##
 # Boot-replay skip button - CH32V006 PORT

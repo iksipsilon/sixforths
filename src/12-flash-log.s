@@ -17,9 +17,14 @@
 # completes, so "-log" and "wipe" never log themselves, while "+log" does
 # (harmless on replay: appends are suppressed while replaying).
 #
-# Flash physics: appends use standard halfword (16-bit) programming into
-# erased flash, so batches are padded to even length (a space before the
-# final newline). wipe uses the fast 64-byte page erase. Both ops execute
+# Flash physics: the V006 erases and programs whole 256-byte pages (FTER,
+# FTPG). An append rewrites each page it touches: the page is copied into
+# the TIB (free at commit time: err_ok zero-fills it right after), the new
+# bytes are merged in, the page is erased unless it already reads all 0xFF,
+# programmed from the TIB and read back. A power cut between erase and
+# program loses that page's earlier lines; replay then stops at the damage
+# (PD4 skips it). Batches stay padded to even length (a space before the
+# final newline) so log_scan can look for an erased halfword. All ops run
 # from flash: the core stalls while the FPEC is busy, which is fine.
 ##
 
@@ -52,29 +57,54 @@ flash_unlock:
     ret
 
 .balign CELL
-# program one halfword into erased flash (standard PG mode)
-# arguments: a0 = flash address (0x08...-based, halfword-aligned),
-#            a2 = halfword value
-# clobbers: t0, t1
-fh_prog:
+# fast-program one 256-byte page from RAM; the page must be erased
+# (reference manual 18.4.5: FTPG, BUFRST, 64 x (word store + BUFLOAD),
+# FLASH_ADDR, STRT)
+# arguments: a0 = page address (0x08...-based, 256-byte aligned),
+#            a2 = source in RAM (CELL-aligned, 256 bytes)
+# clobbers: t0, t1, t2, a2, a3, a4
+fpage_prog:
     li t0, FLASH_R_BASE
-fh_prog_bsy0:
+fpage_prog_bsy0:
     lw t1, FLASH_STATR(t0)
     andi t1, t1, FLASH_STATR_BSY
-    bnez t1, fh_prog_bsy0
-    li t1, FLASH_CTLR_PG
-    sw t1, FLASH_CTLR(t0)       # programming mode on
-    sh a2, 0(a0)                # the program operation itself
-fh_prog_bsy1:
+    bnez t1, fpage_prog_bsy0
+    li t1, FLASH_CTLR_FTPG
+    sw t1, FLASH_CTLR(t0)       # fast page programming mode on
+    li t1, FLASH_CTLR_FTPG | FLASH_CTLR_BUFRST
+    sw t1, FLASH_CTLR(t0)       # clear the page buffer
+fpage_prog_bsy1:
     lw t1, FLASH_STATR(t0)
     andi t1, t1, FLASH_STATR_BSY
-    bnez t1, fh_prog_bsy1
-    sw zero, FLASH_CTLR(t0)     # programming mode off
+    bnez t1, fpage_prog_bsy1
+    mv a3, a0                   # a3 = flash address of the next word
+    li a4, FLASH_PAGE / CELL    # a4 = words left to load (64)
+fpage_prog_load:
+    lw t2, 0(a2)                # next word from RAM
+    sw t2, 0(a3)                # latch it at its flash address
+    li t1, FLASH_CTLR_FTPG | FLASH_CTLR_BUFLOAD
+    sw t1, FLASH_CTLR(t0)       # load it into the page buffer
+fpage_prog_bsy2:
+    lw t1, FLASH_STATR(t0)
+    andi t1, t1, FLASH_STATR_BSY
+    bnez t1, fpage_prog_bsy2
+    addi a2, a2, CELL
+    addi a3, a3, CELL
+    addi a4, a4, -1
+    bnez a4, fpage_prog_load
+    sw a0, FLASH_ADDR(t0)       # page address
+    li t1, FLASH_CTLR_FTPG | FLASH_CTLR_STRT
+    sw t1, FLASH_CTLR(t0)       # start the page programming
+fpage_prog_bsy3:
+    lw t1, FLASH_STATR(t0)
+    andi t1, t1, FLASH_STATR_BSY
+    bnez t1, fpage_prog_bsy3
+    sw zero, FLASH_CTLR(t0)     # fast page programming mode off
     ret
 
 .balign CELL
-# fast-erase one 64-byte flash page
-# arguments: a0 = page address (0x08...-based, 64-byte aligned)
+# fast-erase one 256-byte flash page
+# arguments: a0 = page address (0x08...-based, 256-byte aligned)
 # clobbers: t0, t1
 fpage_erase:
     li t0, FLASH_R_BASE
@@ -163,7 +193,8 @@ log_commit_copy:
     bnez t1, log_commit_exit
 
     # === commit the batch ===
-    # make it even-length for halfword programming: final '\n' -> ' ' '\n'
+    # make it even-length (log_scan looks for an erased halfword):
+    # final '\n' -> ' ' '\n'
     li t0, LOGPND
     lw t1, 0(t0)
     andi a2, t1, 1
@@ -182,20 +213,67 @@ log_commit_even:
     add a4, tp, t1
     li a5, LOG_TOP
     bgtu a4, a5, log_commit_off
-    mv gp, t1                   # gp = remaining bytes (even)
-    li a1, LOGBUF               # a1 = source
-log_commit_flush:
-    beqz gp, log_commit_done
-    lbu a2, 0(a1)               # build the little-endian halfword
-    lbu a3, 1(a1)
-    slli a3, a3, 8
-    or a2, a2, a3
-    mv a0, tp
-    call fh_prog                # program it (clobbers t0, t1)
-    addi tp, tp, 2
-    addi a1, a1, 2
-    addi gp, gp, -2
-    j log_commit_flush
+    mv gp, t1                   # gp = bytes left to write (even, > 0)
+    li a1, LOGBUF               # a1 = next source byte
+log_commit_page:
+    # stage the page holding the frontier in the TIB, and AND its words
+    # together: -1 means the page is still fully erased
+    andi a0, tp, -FLASH_PAGE    # a0 = page address
+    mv a3, a0
+    li a4, TIB_BOTTOM
+    li a5, -1
+    addi t1, a0, FLASH_PAGE     # t1 = end of the page
+log_commit_stage:
+    lw t2, 0(a3)
+    sw t2, 0(a4)
+    and a5, a5, t2
+    addi a3, a3, CELL
+    addi a4, a4, CELL
+    bne a3, t1, log_commit_stage
+    # merge in the batch bytes that fall into this page
+    sub a3, tp, a0              # a3 = frontier offset in the page
+    li a4, TIB_BOTTOM
+    add a4, a4, a3
+log_commit_merge:
+    lbu t2, 0(a1)
+    sb t2, 0(a4)
+    addi a1, a1, 1
+    addi a4, a4, 1
+    addi tp, tp, 1
+    addi a3, a3, 1
+    addi gp, gp, -1
+    beqz gp, log_commit_tail
+    li t1, FLASH_PAGE
+    bltu a3, t1, log_commit_merge
+log_commit_tail:
+    # everything after the new bytes stays erased
+    li t1, FLASH_PAGE
+    li t2, 0xFF
+log_commit_fill:
+    bgeu a3, t1, log_commit_write
+    sb t2, 0(a4)
+    addi a4, a4, 1
+    addi a3, a3, 1
+    j log_commit_fill
+log_commit_write:
+    li t1, -1
+    beq a5, t1, log_commit_prog # page reads all 0xFF: no erase needed
+    call fpage_erase            # a0 = page (clobbers t0, t1)
+log_commit_prog:
+    li a2, TIB_BOTTOM
+    call fpage_prog             # a0 = page, a2 = TIB (clobbers t0-t2, a2-a4)
+    # read the page back: it must match the staged copy
+    mv a3, a0
+    li a4, TIB_BOTTOM
+    addi a5, a0, FLASH_PAGE     # a5 = end of the page
+log_commit_verify:
+    lw t1, 0(a3)
+    lw t2, 0(a4)
+    bne t1, t2, log_commit_off  # the flash did not take it: logging off
+    addi a3, a3, CELL
+    addi a4, a4, CELL
+    bne a3, a5, log_commit_verify
+    bnez gp, log_commit_page    # the batch continues on the next page
 log_commit_done:
     li t0, LOGEND
     sw tp, 0(t0)                # advance the frontier
@@ -247,8 +325,8 @@ wipe_loop:
     li t0, LOG_TOP
     bgeu a3, t0, wipe_done
     mv a0, a3
-    call fpage_erase    # erase one 64-byte page (clobbers t0, t1, ra)
-    addi a3, a3, 64
+    call fpage_erase    # erase one 256-byte page (clobbers t0, t1, ra)
+    addi a3, a3, FLASH_PAGE
     j wipe_loop
 wipe_done:
     li t0, LOGEND

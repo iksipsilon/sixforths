@@ -25,9 +25,11 @@ hardware.
   16x16 `mul`s; `um/mod` is shift-and-subtract. The emulator also lacks `mulh*`.
 - 1 flash wait state at 24 MHz. CFGR0 is written wholesale to 0.
 - Standard halfword flash programming (PG) reportedly **corrupts neighbouring
-  halfwords on real V006 silicon**; the emulator faults on it deliberately.
-  Use fast page programming (FTER 64-byte page erase, FTPG page buffer with
-  BUFRST / BUFLOAD) instead.
+  halfwords on real V006 silicon**. Use fast page operations instead, and note the
+  **V006 fast page is 256 bytes** (the CH32V003's is 64): FTER erases a page, FTPG
+  programs one through the page buffer (BUFRST, 64 x word store + BUFLOAD, FLASH_ADDR,
+  STRT; reference manual 18.4.5). The emulator faults on PG, on a half-loaded buffer,
+  and on programming a page that is not erased.
 - Trap handler (`src/03-interrupts.s`) prints `T<mcause> <mepc>` in hex over UART and
   hangs. Traps use a vector table at 0x0 (`_start` in `sixforths.s`, `mtvec` = 3; the V2
   needs the table 1 KiB aligned): entry 0 = reset jump, 2 = NMI, 3 = every exception.
@@ -67,7 +69,7 @@ hardware.
 
 - Flash 0x00000000: kernel + `.rodata`, **must stay under 16 KiB** (`FLASH` `LENGTH` in
   `src/board/ch32v006f8u6/linker.ld`; confirm it says 16k).
-  Currently 8,564 bytes. Report the size after every change.
+  Currently 8,784 bytes. Report the size after every change.
 - Flash 0x08004000-0x08006800: source-replay log (10 KiB). Space above that is
   reserved for the phonebook / SMS storage. Do not touch it casually.
 - RAM 0x20000000: the user dictionary grows up from here (`HERE`).
@@ -95,9 +97,12 @@ hardware.
 appended to flash and replayed at boot. A line that errors abandons the replay.
 Definitions are batched atomically in `LOGBUF`.
 
-**Known bug: `fh_prog` in `src/12-flash-log.s` still uses halfword PG**, which the emulator
-rejects (so `+log` faults in the emulator) and which is suspect on silicon.
-Porting it to FTPG is the top open task.
+An append rewrites each 256-byte page it touches (`log_commit` in `src/12-flash-log.s`):
+copy the page into the TIB (free at commit time), merge the new bytes, erase the page
+unless it reads all 0xFF, program it with `fpage_prog`, read it back (a mismatch prints
+`? log off`). A power cut between erase and program loses that page's earlier lines;
+replay then stops there (PD4 skips it). Logged lines end with " \n" (the newline became
+a space) and batches are padded to even length for `log_scan`.
 
 ## Build, test, flash
 
@@ -174,9 +179,8 @@ Layout:
 
 ## Open work
 
-- Port `fh_prog` (called from `log_commit`) in `src/12-flash-log.s` to FTPG page-buffer
-  programming; check that `fpage_erase` (already FTER) fits the same scheme. Get `+log`
-  working in the emulator, then on the board.
+- Test `+log` on the board: it uses FTPG page programming now and passes in the
+  emulator, but has not run on silicon yet. Read the log region before and after.
 - Add a pyserial backend to `emulators/test_fotrh.py` so the same tests run against the real
   board (and against the emulator through a fake port).
 - A freeze script to turn stable prelude words into flash words.

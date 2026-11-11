@@ -180,6 +180,68 @@ out = bytes(e.uart_out[start:]).decode("latin1")
 out += " [hang]" if e.pc == h.SYM["beacon_hang"] else " [no hang]"
 check("exception via vector 3 prints the beacon", e, out, ["T00000004 00001234 ", "[hang]"])
 
+# ---- source-replay log: fast 256-byte page programming ----
+LOG0, LOGN = 0x4000, 0x2800                      # log region (flash offsets)
+logbytes = lambda e: bytes(e.f[LOG0:LOG0 + LOGN]).split(b"\xff")[0]
+e = copy.deepcopy(B0)
+h.feed(e, "+log\n: sq dup * ;\n")
+check("log: lines appended (the newline became a space)", e, repr(logbytes(e)),
+      [repr(b"+log \n: sq dup * ; \n")])
+r = h.boot(flash=bytes(e.f))                     # simulated reset
+out, _ = h.feed(r, "3 sq 48 + emit\n")
+check("log: replay after reset brings the word back", r, out, ["emit9"])
+e = copy.deepcopy(B0)
+h.feed(e, "+log\n: tw\n2 *\n;\n: bad\nnosuchword\n")
+check("log: a definition is logged whole, a failed one not at all", e, repr(logbytes(e)),
+      [repr(b"+log \n: tw \n2 * \n; \n")], absent=("bad",))
+e = copy.deepcopy(B0)
+h.feed(e, "+log\n")
+errs = 0
+for ln in lines:
+    if ln.strip():
+        out, _ = h.feed(e, ln + "\n")
+        errs += "  ?" in out
+n = len(logbytes(e))
+r = h.boot(flash=bytes(e.f))
+out, _ = h.feed(r, "5 6 + .\n")
+check(f"log: prelude logged ({n} bytes) and replayed", r,
+      out + f" errs={errs}" + (" [many pages]" if n > 8 * 256 else ""), ["11 ", "errs=0", "[many pages]"])
+h.feed(e, "wipe\n")
+erased = bytes(e.f[LOG0:LOG0 + LOGN]) == b"\xff" * LOGN
+check("log: wipe erases the region", e, "[erased]" if erased else "[NOT erased]", ["[erased]"])
+r = h.boot(flash=bytes(e.f))
+out, _ = h.feed(r, "5 6 + .\n")
+check("log: nothing is replayed after wipe", r, out, ["  ?"])
+img = bytearray(FLASH) + bytearray([0xFF] * (LOG0 - len(FLASH)))
+img += b"0 drop \n" * ((LOGN - 8) // 8)          # an almost full log: 8 bytes free
+e = h.Emu(bytes(img), b"")
+e.gpiod_in = 0x10                                # PD4 held: skip the replay
+h.run_idle(e, 100_000)
+out, _ = h.feed(e, "+log\n: sq dup * ;\n1 drop\n")
+tail = bytes(e.f[LOG0 + LOGN - 8:LOG0 + LOGN])
+check("log: a full log turns logging off", e, out + f" tail={tail!r}",
+      ["? log off", repr(b"+log \n\xff\xff")])
+# emulator guards: the FPEC model must reject what the V006 cannot do
+e = copy.deepcopy(B0)                            # boot unlocked the FPEC
+e.f[LOG0] = 0x00                                 # page 0x4000 is not erased
+CTLR, ADDR, FTPG = 0x40022010, 0x40022014, 1 << 16
+try:
+    e.w32(CTLR, FTPG); e.w32(CTLR, FTPG | (1 << 19))
+    for i in range(64):
+        e.w32(0x08000000 + LOG0 + 4 * i, 0x20202020); e.w32(CTLR, FTPG | (1 << 18))
+    e.w32(ADDR, 0x08000000 + LOG0); e.w32(CTLR, FTPG | (1 << 6))
+except RuntimeError:
+    pass
+f, e.fault = e.fault, None
+check("emulator: programming an unerased page faults", e, f"fault={f}", ["flash-ftpg-not-erased"])
+e = copy.deepcopy(B0)
+try:
+    e.w16(0x08000000 + LOG0, 0)
+except RuntimeError:
+    pass
+f, e.fault = e.fault, None
+check("emulator: halfword flash writes fault", e, f"fault={f}", ["flash-write16"])
+
 # ---- words ----
 e, out, _ = h.session(P, "words\n")
 names = out.split("\n")[0].split()
