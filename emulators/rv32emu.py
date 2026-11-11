@@ -38,8 +38,11 @@ class Emu:
                      'latch': None}     # (page offset, word) awaiting BUFLOAD
         self.gpiod_in = 0        # GPIOD input pins (bit 4 = replay-skip button)
         self.gpiod_cfglr = 0x44444444   # GPIOD_CFGLR reset value: all floating inputs
-        # WeAct board with solder bridges SB3/SB4 closed: PD4 is joined to PD5,
-        # so PD4 reads high while PD5 is an output (the idle-high UART TX)
+        self.gpiod_out = 0              # GPIOD output latch (OUTDR)
+        # WeAct board with solder bridges SB3/SB4 closed: PD4 is joined to PD5.
+        # PD5 is high as the idle UART TX and, released as an input, through
+        # the WCH-LinkE's RX pull-up, so PD4 reads low only while PD5 is a
+        # general-purpose output driving 0 (checked on the board)
         self.weact_bridge = False
 
     def _flash_pa(self, a):
@@ -68,8 +71,9 @@ class Emu:
         if a == 0x40011400:  # GPIOD_CFGLR
             return self.gpiod_cfglr
         if a == 0x40011408:  # GPIOD_INDR
-            pd5_output = (self.gpiod_cfglr >> 20) & 3     # MODE5 != 0
-            return self.gpiod_in | (0x10 if self.weact_bridge and pd5_output else 0)
+            nib5 = (self.gpiod_cfglr >> 20) & 0xF         # CNF5:MODE5
+            pd5_low = (nib5 & 3) and not (nib5 & 8) and not (self.gpiod_out >> 5) & 1
+            return self.gpiod_in | (0x10 if self.weact_bridge and not pd5_low else 0)
         if a == 0x4002200C:  # FLASH_STATR: never busy (ops complete instantly)
             return 0
         if a == 0x40022010:  # FLASH_CTLR
@@ -108,6 +112,15 @@ class Emu:
             return
         if a == 0x40011400:  # GPIOD_CFGLR
             self.gpiod_cfglr = v & M32
+            return
+        if a == 0x4001140C:  # GPIOD_OUTDR
+            self.gpiod_out = v & 0xFFFF
+            return
+        if a == 0x40011410:  # GPIOD_BSHR: low half sets, high half clears
+            self.gpiod_out = (self.gpiod_out | (v & 0xFFFF)) & ~((v >> 16) & 0xFFFF)
+            return
+        if a == 0x40011414:  # GPIOD_BCR: clears
+            self.gpiod_out &= ~(v & 0xFFFF)
             return
         if a == 0x40022014:  # FLASH_ADDR
             self.fpec['faddr'] = v & M32

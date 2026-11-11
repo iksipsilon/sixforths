@@ -38,9 +38,10 @@ hardware.
   Do not put a `.balign 1024` back; it cost ~1.6 KB of padding. If the board prints that, the code did something illegal at that address.
 - Holding **PD4 high at reset skips the source-replay log** (see below). This is the
   recovery switch if a bad log line stops the board booting. On the owner's WeAct board
-  the closed solder bridges SB3/SB4 join PD4 to PD5 (UART TX), so `gpio_init` samples
-  PD4 while PD5 is still an undriven input; never read PD4 after the UART is set up.
-  The emulator models this with `weact_bridge = True`.
+  the closed solder bridges SB3/SB4 join PD4 to PD5 (UART TX). PD5 is high as the TX
+  and also when released (the WCH-LinkE's RX pulls it up), so `gpio_init` samples PD4
+  with PD5 driven low for ~3 us; never read PD4 any other way. The emulator models this
+  with `weact_bridge = True`.
 
 ## Forth architecture
 
@@ -72,7 +73,7 @@ hardware.
 
 - Flash 0x00000000: kernel + `.rodata`, **must stay under 16 KiB** (`FLASH` `LENGTH` in
   `src/board/ch32v006f8u6/linker.ld`; confirm it says 16k).
-  Currently 8,788 bytes. Report the size after every change.
+  Currently 8,792 bytes. Report the size after every change.
 - Flash 0x08004000-0x08006800: source-replay log (10 KiB). Space above that is
   reserved for the phonebook / SMS storage. Do not touch it casually.
 - RAM 0x20000000: the user dictionary grows up from here (`HERE`).

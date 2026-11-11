@@ -63,12 +63,13 @@
 # PD4 is configured as an input with pull-down; holding it HIGH (button to
 # 3V3) during reset skips the source-replay and boots to a bare ok prompt.
 # Active-high so that an unwired pin (and the emulator's all-zero GPIO
-# reads) means "replay normally". gpio_init samples it before PD5 becomes
-# the UART TX: on the WeAct board the closed solder bridges SB3/SB4 join
-# PD4 to PD5, and the idle-high TX would read as a held button.
+# reads) means "replay normally". gpio_init samples it with PD5 driven low:
+# on the WeAct board the closed solder bridges SB3/SB4 join PD4 to PD5, and
+# PD5 is otherwise high (idle UART TX, or the WCH-LinkE's RX pull-up).
 ##
 .equ GPIOD_BASE, 0x40011400
 .equ GPIOD_INDR, 0x08           # input data register offset
+.equ GPIOD_BCR, 0x14            # bit clear register offset (write 1 = output 0)
 .equ LOG_SKIP_BIT, (1 << 4)     # PD4
 
 .balign CELL
@@ -137,20 +138,25 @@ gpio_init:
     li t0, 0x40011400                       # load base address of GPIOD
     lw t1, 0x00(t0)                         # load value from the Port config register low (GPIOD_CFGLR)
 
-    # CH32V006 PORT: sample the replay-skip button (PD4) while PD5 is not yet
-    # the UART TX: on the WeAct board the closed solder bridges SB3/SB4 join
-    # PD4 to PD5 (through USB D-, 33 R + 1.5 k), so the idle-high TX would
-    # read as a held button. PD4: MODE4 = 00 (input), CNF4 = 10 (input with
-    # pull-up/pull-down) -> nibble 0b1000; OUTDR bit 4 is 0 at reset =
-    # pull-down, so the pin reads 0 unless the button pulls it to 3V3.
-    # PD5: floating input (0b0100) for the sample, also after a software
-    # reboot, where it is still the TX pin.
+    # CH32V006 PORT: sample the replay-skip button (PD4) with PD5 driven low.
+    # On the WeAct board the closed solder bridges SB3/SB4 join PD4 to PD5
+    # (through USB D-, 33 R + 1.5 k). As the UART TX, PD5 idles high; released
+    # as an input, it is still pulled high by the WCH-LinkE's RX. Either way
+    # PD4 would read as a held button. Driven low, PD5 pulls PD4 low through
+    # the 1.5 k, which the button (PD4 straight to 3V3) still overrides.
+    # PD4: MODE4 = 00 (input), CNF4 = 10 (input with pull-up/pull-down) ->
+    # nibble 0b1000; OUTDR bit 4 is 0 at reset = pull-down. PD5: general
+    # purpose push-pull output, 10 MHz (0b0001), latch 0. The low pulse on
+    # TX lasts ~3 us, under half a bit at 115200 baud, so the receiver
+    # should not see a character.
+    li t2, (1 << 5)
+    sw t2, GPIOD_BCR(t0)                    # PD5 output latch = 0
     li t2, ~((0xf << (4*4)) | (0xf << (4*5)))
     and t1, t1, t2                          # clear the pin 4 and pin 5 bits
-    li t2, (0b1000 << (4*4)) | (0b0100 << (4*5))
-    or t1, t1, t2                           # PD4 pulled down, PD5 released
+    li t2, (0b1000 << (4*4)) | (0b0001 << (4*5))
+    or t1, t1, t2                           # PD4 pulled down, PD5 driven low
     sw t1, 0x00(t0)                         # store the value in GPIOD_CFGLR
-    li t2, 1024                             # let PD4 settle (~0.15 ms)
+    li t2, 16                               # let PD4 settle (~3 us)
 gpio_settle:
     addi t2, t2, -1
     bnez t2, gpio_settle

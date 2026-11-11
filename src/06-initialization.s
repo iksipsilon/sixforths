@@ -19,7 +19,7 @@ boot:
     # LOGSRC = -1 means "armed"; the first pass through reset: turns it into
     # LOG_BASE and the replay begins. Holding PD4 boots to a bare ok prompt,
     # the escape hatch for a log whose last line starts a broken main loop.
-    # (CH32V006 PORT: gpio_init samples PD4 before PD5 becomes the UART TX)
+    # (CH32V006 PORT: gpio_init samples PD4 with PD5 driven low)
     li t2, -1
     beqz a0, boot_arm
     mv t2, zero         # button held: no replay this boot
