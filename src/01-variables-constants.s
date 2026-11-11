@@ -1,0 +1,77 @@
+##
+# Variables and constants
+##
+
+.equ FORTH_VERSION, 3
+
+##
+# Memory map
+##
+
+# DSP, RSP, TIB stacks grow downward from the top of memory
+.equ DSP_TOP, RAM_BASE + RAM_SIZE       # address of top of data stack
+.equ RSP_TOP, DSP_TOP - STACK_SIZE      # address of top of return stack
+.equ TIB_TOP, RSP_TOP - STACK_SIZE      # address of top of terminal buffer
+.equ TIB, TIB_TOP - STACK_SIZE          # address of bottom of terminal buffer
+
+# variables
+.equ STATE, TIB - CELL                  # 1 CELL for STATE variable
+.equ TOIN, STATE - CELL                 # 1 CELL for TOIN variable (looks into TIB)
+.equ HERE, TOIN - CELL                  # 1 CELL for HERE variable
+.equ LATEST, HERE - CELL                # 1 CELL for LATEST variable
+.equ NOOP, LATEST - CELL                # 1 CELL for NOOP variable
+# CH32V006 PORT: source-replay log variables (see 12-flash-log.s)
+.equ LOGEN, NOOP - CELL                 # 1 CELL: logging enabled flag (0 = off)
+.equ LOGPND, LOGEN - CELL               # 1 CELL: pending byte count in LOGBUF
+.equ LOGSRC, LOGPND - CELL              # 1 CELL: replay pointer (0 = UART, -1 = armed)
+.equ LOGEND, LOGSRC - CELL              # 1 CELL: append frontier in the flash log
+.equ PAD, LOGEND - (CELL * 64)          # 64 CELLS between LOGEND and PAD
+# CH32V006 PORT: pending batch buffer for the log. Lines of a multi-line
+# definition are held here and committed to flash only when a line ends with
+# STATE = 0, so a definition reaches the log whole or not at all.
+.equ LOGBUF_SIZE, 256
+.equ LOGBUF, PAD - LOGBUF_SIZE
+
+# dictionary grows upward from the RAM base address
+.equ FORTH_SIZE, LOGBUF - RAM_BASE      # remaining memory for Forth
+
+##
+# Flash layout (CH32V006 PORT)
+##
+
+# The kernel occupies the bottom 16 KiB (enforced by linker.ld LENGTH).
+# Above it, a 10 KiB source-replay log: successfully interpreted lines are
+# appended as plain text and re-interpreted at boot. Erased flash (0xFF) is
+# the natural end-of-log marker; the log never contains a 0xFF byte.
+# The regions use the 0x08000000 flash base: the FPEC takes such addresses
+# for program/erase, and the same addresses read back via the flash alias.
+# The space above LOG_TOP is reserved for the phonebook and SMS slot stores.
+.equ FLASH_ALIAS, 0x08000000
+.equ LOG_BASE, FLASH_ALIAS + 0x4000     # bottom of the source-replay log
+.equ LOG_TOP, FLASH_ALIAS + 0x6800      # top of the log (10 KiB region)
+
+##
+# Interpreter constants
+##
+
+.equ CHAR_NEWLINE, '\n'         # newline character 0x0A
+.equ CHAR_CARRIAGE, '\r'        # carriage return character 0x0D
+.equ CHAR_SPACE, ' '            # space character 0x20
+.equ CHAR_BACKSPACE, '\b'       # backspace character 0x08
+.equ CHAR_COMMENT, '\\'         # backslash character 0x5C
+.equ CHAR_COMMENT_OPARENS, '('  # open parenthesis character 0x28
+.equ CHAR_COMMENT_CPARENS, ')'  # close parenthesis character 0x29
+.equ CHAR_MINUS, '-'            # minus character 0x2D
+
+##
+# Flags
+###
+
+# CH32V006 PORT: jonesforth-style headers. The word name is stored in the
+# header as a counted string: one flags+length byte, then the name bytes,
+# then zero-padding up to a CELL boundary, then the code field. The flags
+# live in the top bits of the count byte (fig-Forth/jonesforth layout), so
+# names are limited to 31 characters.
+.equ F_IMMEDIATE, 0x80          # immediate flag bit in the flags+length byte
+.equ F_HIDDEN, 0x20             # hidden flag bit in the flags+length byte
+.equ F_LENMASK, 0x1f            # name length mask (max name length 31)
