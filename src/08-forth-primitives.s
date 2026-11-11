@@ -88,8 +88,6 @@ defcode "key", KEY, EXIT
 # emit ( x -- )         Write 8-bit character to uart output
 defcode "emit", EMIT, KEY
     checkunderflow 0    # check for stack underflow of data stack (1 CELL)
-    li a0, CHAR_SPACE   # load space character into W
-    call uart_put       # send character from W to uart
     POP a0              # copy top of data stack into W
     call uart_put       # send character from W to uart
     NEXT

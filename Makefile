@@ -30,14 +30,14 @@ build: $(PROGNAME).o $(PROGNAME).elf $(PROGNAME).bin $(PROGNAME).hex $(PROGNAME)
 
 # CH32V006 PORT: the pattern rule below only tracks fiveforths.s, but the
 # real sources are .include'd -- declare them so edits trigger a rebuild
-$(PROGNAME).o: $(wildcard src/*.s) $(wildcard src/mcus/$(MCU)/*.s) $(wildcard src/boards/$(BOARD)/*.s)
-$(PROGNAME).elf: src/boards/$(BOARD)/linker.ld
+$(PROGNAME).o: $(wildcard src/*.s) $(wildcard src/mcu/$(MCU)/*.s) $(wildcard src/board/$(BOARD)/*.s)
+$(PROGNAME).elf: src/board/$(BOARD)/linker.ld
 
 %.o: %.s
-		$(AS) $(CFLAGS) -march=$(ARCH) -I src/boards/$(BOARD) -I src/mcus/$(MCU) -I src -o $@ $<
+		$(AS) $(CFLAGS) -march=$(ARCH) -I src/board/$(BOARD) -I src/mcu/$(MCU) -I src -o $@ $<
 
 %.elf: %.o
-		$(LD) -m $(EMU) -T src/boards/$(BOARD)/linker.ld -o $@ $<
+		$(LD) -m $(EMU) -T src/board/$(BOARD)/linker.ld -o $@ $<
 
 %.bin: %.elf
 		$(OBJCOPY) -O binary $< $@
