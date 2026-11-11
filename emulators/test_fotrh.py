@@ -44,10 +44,10 @@ for ln in lines:
     if E.fault is not None or steps < 0:
         bad.append((ln, E.fault, steps, out[-120:]))
         break
-    if "?" in out.replace("? ", "?").split("\n")[-1] and not ln.lstrip().startswith("\\"):
-        # an error line prints "  ?" after the echo; comment lines can contain '?'
-        if "  ?" in out:
-            bad.append((ln, None, steps, out[-120:]))
+    # an error prints "  ?..." on its own line after the echoed input (line 0;
+    # a comment line has no echoed newline, so nothing follows it)
+    if any(r.lstrip().startswith("?") for r in out.split("\n")[1:]):
+        bad.append((ln, None, steps, out[-120:]))
 if bad:
     print("PRELUDE LOAD FAILED:")
     for b in bad: print("  ", b)
