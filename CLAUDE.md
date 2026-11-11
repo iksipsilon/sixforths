@@ -40,8 +40,9 @@ hardware.
   recovery switch if a bad log line stops the board booting. On the owner's WeAct board
   the closed solder bridges SB3/SB4 join PD4 to PD5 (UART TX). PD5 is high as the TX
   and also when released (the WCH-LinkE's RX pulls it up), so `gpio_init` samples PD4
-  with PD5 driven low for ~3 us; never read PD4 any other way. The emulator models this
-  with `weact_bridge = True`.
+  with PD5 driven low for ~3 us; never read PD4 any other way. That pulse shows up as
+  one stray character before the banner. The emulator models this with
+  `weact_bridge = True`.
 
 ## Forth architecture
 
@@ -183,8 +184,9 @@ Layout:
 
 ## Open work
 
-- Test `+log` on the board: it uses FTPG page programming now and passes in the
-  emulator, but has not run on silicon yet. Read the log region before and after.
+- `+log` works on silicon (FTPG appends, replay after every reset, tested 2026-11-12).
+  Not yet tested on the board: a batch crossing a page boundary (load the prelude with
+  logging on), the log-full path, and `wipe`.
 - Add a pyserial backend to `emulators/test_fotrh.py` so the same tests run against the real
   board (and against the emulator through a fake port).
 - A freeze script to turn stable prelude words into flash words.
