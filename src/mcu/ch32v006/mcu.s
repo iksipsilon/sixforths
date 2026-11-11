@@ -134,6 +134,7 @@ uart_done:
 # (CH32V006 PORT: USART1 default mapping is TX = PD5, RX = PD6, i.e. port D
 # CFGLR nibbles 5 and 6, instead of the GD32V's PA9/PA10 in CTL1)
 # returns: a0 = replay-skip button (0 = released, LOG_SKIP_BIT = held)
+# clobbers: t0, t1, t2, a1, a2
 gpio_init:
     li t0, 0x40011400                       # load base address of GPIOD
     lw t1, 0x00(t0)                         # load value from the Port config register low (GPIOD_CFGLR)
@@ -144,40 +145,44 @@ gpio_init:
     # as an input, it is still pulled high by the WCH-LinkE's RX. Either way
     # PD4 would read as a held button. Driven low, PD5 pulls PD4 low through
     # the 1.5 k, which the button (PD4 straight to 3V3) still overrides.
-    # PD4: MODE4 = 00 (input), CNF4 = 10 (input with pull-up/pull-down) ->
-    # nibble 0b1000; OUTDR bit 4 is 0 at reset = pull-down. PD5: general
-    # purpose push-pull output, 10 MHz (0b0001), latch 0. The low pulse on
-    # TX lasts ~3 us, under half a bit at 115200 baud, so the receiver
-    # should not see a character.
-    li t2, (1 << 5)
-    sw t2, GPIOD_BCR(t0)                    # PD5 output latch = 0
-    li t2, ~((0xf << (4*4)) | (0xf << (4*5)))
-    and t1, t1, t2                          # clear the pin 4 and pin 5 bits
-    li t2, (0b1000 << (4*4)) | (0b0001 << (4*5))
-    or t1, t1, t2                           # PD4 pulled down, PD5 driven low
+    # Step 1: PD4 MODE4 = 00 (input), CNF4 = 10 (input with pull-up/pull-down)
+    # -> nibble 0b1000; OUTDR bit 4 is 0 at reset = pull-down. PD5 is left as
+    # it is (high), so the pull-down settles without a glitch on TX.
+    li t2, ~(0xf << (4*4))                  # load bitmask to clear the 4 config bits of pin 4
+    and t1, t1, t2                          # clear MODE4[1:0], CNF4[1:0]
+    li t2, (0b1000 << (4*4))                # input with pull-up/pull-down
+    or t1, t1, t2                           # set the pin 4 bits
     sw t1, 0x00(t0)                         # store the value in GPIOD_CFGLR
-    li t2, 16                               # let PD4 settle (~3 us)
+    li t2, 64                               # let the pull-down settle (~10 us)
 gpio_settle:
     addi t2, t2, -1
     bnez t2, gpio_settle
+
+    # Step 2: prepare the final configuration in a2: TX on pin 5 of port D,
+    # MODE5 = 01 (output 10 MHz), CNF5 = 10 (alternate function push-pull)
+    # -> nibble 0b1001; RX on pin 6, MODE6 = 00 (input), CNF6 = 01 (floating
+    # input) -> nibble 0b0100. a1 is the same with PD5 a general purpose
+    # push-pull output (0b0001) whose latch is 0.
+    li t2, ~((0xf << (4*5)) | (0xf << (4*6)))
+    and t1, t1, t2                          # clear the pin 5 and pin 6 bits
+    li t2, (0b1001 << (4*5)) | (0b0100 << (4*6))
+    or a2, t1, t2                           # a2 = TX on PD5, RX on PD6
+    li t2, (0b0001 << (4*5)) | (0b0100 << (4*6))
+    or a1, t1, t2                           # a1 = the same with PD5 a plain output
+    li t2, (1 << 5)
+    sw t2, GPIOD_BCR(t0)                    # PD5 output latch = 0
+
+    # Step 3: the sample. TX is low only from this store to the next one,
+    # ~0.5 us (about a sixteenth of a bit at 115200 baud), too short for the
+    # receiver to see a character; through the 1.5 k, PD4 follows in ~50 ns.
+    sw a1, 0x00(t0)                         # PD5 driven low
+    nop
+    nop
+    nop
+    nop
     lw a0, GPIOD_INDR(t0)                   # read the port D inputs
+    sw a2, 0x00(t0)                         # PD5 is the UART TX again (idle high)
     andi a0, a0, LOG_SKIP_BIT               # keep the button (PD4)
-
-    # configure TX on pin 5 of port D: MODE5 = 01 (output 10 MHz), CNF5 = 10
-    # (alternate function push-pull) -> nibble 0b1001
-    li t2, ~(0xf << (4*5))                  # load bitmask to clear the 4 config bits of pin 5
-    and t1, t1, t2                          # clear MODE5[1:0], CNF5[1:0]
-    li t2, (0b1001 << (4*5))                # AF push-pull, 10 MHz
-    or t1, t1, t2                           # set the pin 5 bits
-
-    # configure RX on pin 6 of port D: MODE6 = 00 (input), CNF6 = 01
-    # (floating input) -> nibble 0b0100
-    li t2, ~(0xf << (4*6))                  # load bitmask to clear the 4 config bits of pin 6
-    and t1, t1, t2                          # clear MODE6[1:0], CNF6[1:0]
-    li t2, (0b0100 << (4*6))                # floating input
-    or t1, t1, t2                           # set the pin 6 bits
-
-    sw t1, 0x00(t0)                         # store the value in the Port config register (GPIOD_CFGLR)
 
 gpio_done:
     ret

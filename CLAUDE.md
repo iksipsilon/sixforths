@@ -40,9 +40,9 @@ hardware.
   recovery switch if a bad log line stops the board booting. On the owner's WeAct board
   the closed solder bridges SB3/SB4 join PD4 to PD5 (UART TX). PD5 is high as the TX
   and also when released (the WCH-LinkE's RX pulls it up), so `gpio_init` samples PD4
-  with PD5 driven low for ~3 us; never read PD4 any other way. That pulse shows up as
-  one stray character before the banner. The emulator models this with
-  `weact_bridge = True`.
+  with PD5 driven low for only ~0.5 us (7 instructions; a ~3 us pulse showed up as a
+  stray character before the banner); never read PD4 any other way. The emulator
+  models this with `weact_bridge = True`.
 
 ## Forth architecture
 
@@ -74,7 +74,7 @@ hardware.
 
 - Flash 0x00000000: kernel + `.rodata`, **must stay under 16 KiB** (`FLASH` `LENGTH` in
   `src/board/ch32v006f8u6/linker.ld`; confirm it says 16k).
-  Currently 8,824 bytes. Report the size after every change.
+  Currently 8,828 bytes. Report the size after every change.
 - Flash 0x08004000-0x08006800: source-replay log (10 KiB). Space above that is
   reserved for the phonebook / SMS storage. Do not touch it casually.
 - RAM 0x20000000: the user dictionary grows up from here (`HERE`).
