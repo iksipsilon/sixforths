@@ -154,6 +154,22 @@ check("key? empty", e, out, ["0 "])
 e, out, _ = h.session(P, "key? .\n65 emit\n")
 check("key? pending", e, out, ["-1 ", "A"])
 
+# ---- trap entry: reset and traps share 0x0; _start sends mcause != 0 to the beacon ----
+check("mtvec = 0 after boot", B0, f"mtvec={B0.csr.get(0x305)};", ["mtvec=0;"])
+e = copy.deepcopy(B0)
+e.csr[0x342], e.csr[0x341], e.pc = 4, 0x1234, 0   # as if a misaligned load trapped at 0x1234
+start = len(e.uart_out)
+try:
+    for _ in range(20000):
+        if e.pc == h.SYM["beacon_hang"]:
+            break
+        e.step()
+except RuntimeError:
+    pass
+out = bytes(e.uart_out[start:]).decode("latin1")
+out += " [hang]" if e.pc == h.SYM["beacon_hang"] else " [no hang]"
+check("trap at 0x0 prints the beacon", e, out, ["T00000004 00001234 ", "[hang]"])
+
 # ---- words ----
 e, out, _ = h.session(P, "words\n")
 names = out.split("\n")[0].split()

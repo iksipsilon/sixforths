@@ -29,7 +29,9 @@ hardware.
   Use fast page programming (FTER 64-byte page erase, FTPG page buffer with
   BUFRST / BUFLOAD) instead.
 - Trap handler (`src/03-interrupts.s`) prints `T<mcause> <mepc>` in hex over UART and
-  hangs. If the board prints that, the code did something illegal at that address.
+  hangs. Traps enter at 0x0 like reset (`mtvec` = 0; the V2 needs a 1 KiB-aligned trap
+  base): `_start` in `sixforths.s` sends a non-zero `mcause` to the handler. Do not put
+  a `.balign 1024` back; it cost ~1.6 KB of padding. If the board prints that, the code did something illegal at that address.
 - Holding **PD4 high at reset skips the source-replay log** (see below). This is the
   recovery switch if a bad log line stops the board booting.
 
@@ -63,7 +65,7 @@ hardware.
 
 - Flash 0x00000000: kernel + `.rodata`, **must stay under 16 KiB** (`FLASH` `LENGTH` in
   `src/board/ch32v006f8u6/linker.ld`; confirm it says 16k).
-  Currently 10,248 bytes. Report the size after every change.
+  Currently 8,560 bytes. Report the size after every change.
 - Flash 0x08004000-0x08006800: source-replay log (10 KiB). Space above that is
   reserved for the phonebook / SMS storage. Do not touch it casually.
 - RAM 0x20000000: the user dictionary grows up from here (`HERE`).

@@ -31,9 +31,16 @@ Copyright (c) 2021~ Alexander Williams, https://a1w.ca
 # tp = scratch (was t6)
 
 # Ensure the _start entry label is defined first
+# CH32V006 PORT: reset and traps share this entry. The QingKe V2 needs a
+# 1 KiB-aligned trap base (mtvec); 0x0 is one, so mtvec = 0 (its reset value)
+# and no alignment padding is needed. mcause is 0 after every reset, and no
+# trap has cause 0 (instruction misalignment cannot happen with the C
+# extension), so a non-zero mcause here means a trap.
 .text
 .global _start
 _start:
+    csrr t0, mcause                 # 0 after reset, non-zero after a trap
+    bnez t0, interrupt_handler      # trap: print T<mcause> <mepc> and hang
     j boot
 
 # include board-specific functions and constants from src/boards/<board>/
