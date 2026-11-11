@@ -32,7 +32,7 @@ B0 = h.boot()
 print("boot banner ok:", "FiveForths" in bytes(B0.uart_out).decode("latin1"), "fault:", B0.fault)
 
 # ---- load the prelude line by line, flag any '?' ----
-lines = [l for l in open(os.path.join(HERE, "prelude.f")).read().split("\n")]
+lines = [l for l in open(os.path.join(HERE, "..", "prelude.f")).read().split("\n")]
 B = B0
 import copy
 E = copy.deepcopy(B0)

@@ -105,7 +105,10 @@ automatically (add its `.include` to `sixforths.s`). Ubuntu package:
 Hardware (the board is plugged in through a WCH-LinkE, attached to WSL2 with usbipd-win):
 
     minichlink -w sixforths.bin flash -b    # program the chip and reboot
-    picocom -b 115200 /dev/ttyACM0          # talk to the REPL (Ctrl-A Ctrl-X to quit)
+    picocom -b 115200 --imap lfcrlf --omap crlf /dev/ttyACM0   # talk to the REPL (Ctrl-A Ctrl-X to quit)
+
+The two maps are needed: the board ends its lines with LF only, and it ignores CR,
+so Enter (CR) must be sent as LF. `make term` runs the same picocom command.
 
 Layout:
 - `sixforths.s` (repo root) is the top-level file. It includes `board.s`, `mcu.s`, then
@@ -116,11 +119,11 @@ Layout:
 - `src/13-ans-primitives.s` holds the ANS-style assembly words.
 - `emulators/` holds `rv32emu.py` (the owner's RV32EC emulator: alignment, RV32E register
   use, FPEC sequencing and illegal instructions all fault), `harness.py` (boots
-  `../sixforths.bin` in it), `test_fotrh.py` (the tests) and `prelude.f`. Tests must pass
-  before a change is called done.
-- `prelude.f` is everything written in Forth on top of the primitives (control flow,
-  defining words, number output, strings, `forget`, `dump`). It costs about 2.8 KB of RAM
-  dictionary. Promoting stable prelude words into flash is a planned task; `prelude.f`
+  `../sixforths.bin` in it) and `test_fotrh.py` (the tests; it loads `../prelude.f`).
+  Tests must pass before a change is called done.
+- `prelude.f` (repo root) is everything written in Forth on top of the primitives (control
+  flow, defining words, number output, strings, `forget`, `dump`). It costs about 2.8 KB of
+  RAM dictionary. Promoting stable prelude words into flash is a planned task; `prelude.f`
   may then move to `src/`.
 - `docs/` holds reference PDFs (CH32V00xRM register manual, CH32V006 datasheet, pinout, the
   A7670X HAT schematic, Moving Forth parts 1-8). Read only the pages you need.

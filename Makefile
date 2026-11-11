@@ -70,12 +70,12 @@ flash-ch32v006:
 # CH32V006 PORT: serial console via picocom.
 # Default device is the WCH-LinkE's own CDC-ACM serial passthrough
 # (/dev/ttyACM0); override with TERMINAL=/dev/ttyUSB0 for a CH340.
-# --omap crcrlf: picocom sends CR on Enter; FiveForths ignores CR and
-#                terminates tokens on LF, so map CR -> CR+LF
 # --imap lfcrlf: FiveForths transmits bare LF; map to CR+LF for display
+# --omap crlf:   picocom sends CR on Enter; FiveForths ignores CR and
+#                terminates lines on LF, so map CR -> LF
 
 term:
-		picocom -b 115200 --omap crcrlf --imap lfcrlf $(TERMINAL)
+		picocom -b 115200 --imap lfcrlf --omap crlf $(TERMINAL)
 
 # CH32V006 PORT: build for the CH32V006F8U6 (this is also the default)
 ch32v006f8u6:
