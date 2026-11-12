@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for 13-ans-primitives.s and prelude.f, run in the RV32EC emulator."""
+"""Tests for the kernel words (and prelude.f, if it holds any), run in the RV32EC emulator."""
 import os, sys, time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -153,6 +153,17 @@ t("print limits", "2147483647 . -2147483648 . 0 .", "2147483647 -2147483648 0 ")
 t("hex", "hex 255 u. -1 u. decimal 255 .", "FF FFFFFFFF 255 ")
 t("dump", "pad 4 65 fill pad 4 dump", "41 41 41 41 ")
 
+t("spaces", "65 emit 3 spaces 66 emit 0 spaces 67 emit -2 spaces 68 emit", "A   BCD")
+t("u. and base", "hex 4096 u. decimal 4096 u. base @ .", "1000 4096 10 ")
+t("hold sign in a picture", ": pic dup abs 0 <# # # 46 hold #s rot sign #> type ; -1234 pic", "-12.34")
+t("cr", "65 emit cr 66 emit", "A\r\nB")
+t("type of nothing", "pad 0 type 65 emit", "emit\nA")
+t("/ and mod signed", "-7 2 / . -7 2 mod . 7 -2 / . 7 -2 mod . -7 -2 / . -7 -2 mod .", "-3 -1 -3 1 3 -1 ")
+t("/mod limits", "-2147483648 1 /mod . . 2147483647 -1 /mod . .", "-2147483648 0 -2147483647 0 ")
+t("division by zero does not trap", "7 0 /mod 2drop 7 0 / drop 7 0 mod drop 7 0 u/mod 2drop 65 emit", "emit\nA")
+t("depth of an empty stack", "depth .", "0 ")
+t("nested literal string words", ': g7 s" ab" s" cd" type type ; g7', "cdab")
+
 # ---- abort, quit ----
 t("abort", "5 abort 66 emit", "  ?", absent=("B",))
 e, out, _ = h.session(P, "1 2 : q quit ; q 65 emit\n66 emit\n. .\n")
@@ -204,23 +215,23 @@ e = copy.deepcopy(B0)
 h.feed(e, "+log\n: tw\n2 *\n;\n: bad\nnosuchword\n")
 check("log: a definition is logged whole, a failed one not at all", e, repr(logbytes(e)),
       [repr(b"+log \n: tw \n2 * \n; \n")], absent=("bad",))
+# a log of many pages (this used to be the prelude, which now lives in flash)
 e = copy.deepcopy(B0)
 h.feed(e, "+log\n")
 errs = 0
-for ln in lines:
-    if ln.strip():
-        out, _ = h.feed(e, ln + "\n")
-        errs += "  ?" in out
+for k in range(180):
+    out, _ = h.feed(e, f": w{k} {k} 3 * ;\n")
+    errs += "  ?" in out
 n = len(logbytes(e))
 r = h.boot(flash=bytes(e.f))
-out, _ = h.feed(r, "5 6 + .\n")
-check(f"log: prelude logged ({n} bytes) and replayed", r,
-      out + f" errs={errs}" + (" [many pages]" if n > 8 * 256 else ""), ["11 ", "errs=0", "[many pages]"])
+out, _ = h.feed(r, "w0 w179 + .\n")
+check(f"log: 180 definitions logged ({n} bytes) and replayed", r,
+      out + f" errs={errs}" + (" [many pages]" if n > 8 * 256 else ""), ["537 ", "errs=0", "[many pages]"])
 h.feed(e, "wipe\n")
 erased = bytes(e.f[LOG0:LOG0 + LOGN]) == b"\xff" * LOGN
 check("log: wipe erases the region", e, "[erased]" if erased else "[NOT erased]", ["[erased]"])
 r = h.boot(flash=bytes(e.f))
-out, _ = h.feed(r, "5 6 + .\n")
+out, _ = h.feed(r, "w0 .\n")
 check("log: nothing is replayed after wipe", r, out, ["  ?"])
 img = bytearray(FLASH) + bytearray([0xFF] * (LOG0 - len(FLASH)))
 img += b"0 drop \n" * ((LOGN - 8) // 8)          # an almost full log: 8 bytes free

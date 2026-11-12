@@ -32,7 +32,11 @@
 .equ LOGPND, LOGEN - CELL               # 1 CELL: pending byte count in LOGBUF
 .equ LOGSRC, LOGPND - CELL              # 1 CELL: replay pointer (0 = UART, -1 = armed)
 .equ LOGEND, LOGSRC - CELL              # 1 CELL: append frontier in the flash log
-.equ PAD, LOGEND - (CELL * 64)          # 64 CELLS between LOGEND and PAD
+# CH32V006 PORT: variables of the number output words. They are RAM cells here
+# because the words that use them (10-forth-words.s) live in flash.
+.equ var_BASE, LOGEND - CELL            # 1 CELL: number base for . u. # (see base)
+.equ var_HLD, var_BASE - CELL           # 1 CELL: <# ... #> build pointer (see hld)
+.equ PAD, var_HLD - (CELL * 64)         # 64 CELLS between var_HLD and PAD
 # CH32V006 PORT: pending batch buffer for the log. Lines of a multi-line
 # definition are held here and committed to flash only when a line ends with
 # STATE = 0, so a definition reaches the log whole or not at all.

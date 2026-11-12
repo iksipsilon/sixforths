@@ -40,6 +40,11 @@ boot_arm:
     li t1, var_LATEST   # load LATEST variable
     sw t0, 0(t1)        # initialize LATEST variable to contain last_word memory address
 
+    # CH32V006 PORT: numbers print in decimal until `hex` says otherwise
+    li t0, 10
+    li t1, var_BASE
+    sw t0, 0(t1)
+
     # CH32V006 PORT: source-replay log initialization
     call flash_unlock   # unlock the FPEC: program/erase enabled from here on
     call log_scan       # find the append frontier (first erased halfword)

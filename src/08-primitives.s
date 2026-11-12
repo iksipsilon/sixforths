@@ -320,6 +320,14 @@ defcode "s0",2,,SZERO
     PUSH t1
     NEXT
 
+# depth ( -- n )        Number of cells on the data stack
+defcode "depth",5,,DEPTH
+    li t1, DSP_TOP
+    sub t1, t1, sp              # bytes in use
+    srai t1, t1, 2              # cells
+    PUSH t1
+    NEXT
+
 ##
 # Return stack
 ##
@@ -506,6 +514,37 @@ defcode ",",1,,COMMA
     sw a4, 0(t2)        # advance HERE
     NEXT
 
+# c, ( c -- )           Append one byte to the dictionary at HERE. HERE is left
+# unaligned; `,`, `:` and `create` round it up, or use align.
+defcode "c,",2,,CCOMMA
+    checkunderflow 0
+    POP a1
+    li t2, var_HERE
+    lw a4, 0(t2)
+    li a5, LOGBUF               # dictionary bounds check, like `,`
+    bge a4, a5, err_mem
+    sb a1, 0(a4)
+    addi a4, a4, 1
+    sw a4, 0(t2)
+    NEXT
+
+# align ( -- )          Round HERE up to the next CELL boundary
+defcode "align",5,,ALIGN
+    li t2, var_HERE
+    lw a4, 0(t2)
+    addi a4, a4, CELL-1
+    andi a4, a4, -CELL
+    sw a4, 0(t2)
+    NEXT
+
+# move ( src dst u -- ) Copy u bytes; the regions may overlap either way
+defcode "move",4,,MOVE
+    checkunderflow 2*CELL
+    lw a1, 2*CELL(sp)           # src
+    lw a2, CELL(sp)             # dst
+    bltu a1, a2, code_CMOVEUP   # dst above src: copy from the top down
+    j code_CMOVE                # otherwise from the bottom up
+
 ##
 # Arithmetic
 ##
@@ -657,34 +696,111 @@ defcode "um*",3,,UMSTAR
     sw a4, 0(sp)                # hi (top)
     NEXT
 
-# um/mod ( lo hi u -- rem quot )   Unsigned 64/32 division, 32-step restoring.
-# Needs hi < u for a 32-bit quotient (otherwise the quotient wraps, as in
-# every um/mod). u = 0 gives quot = -1 instead of trapping. The 33-bit case
+.balign CELL
+# udiv64: unsigned 64/32 division, 32-step restoring (shift and subtract: the
+# QingKe V2C has no divide instruction).
+# arguments: a1 = dividend low, t1 = dividend high, a2 = divisor
+# returns: a1 = quotient, t1 = remainder
+# Needs high < divisor for a 32-bit quotient (otherwise the quotient wraps).
+# A divisor of 0 gives quotient -1 instead of trapping. The 33-bit case
 # (remainder shifts a 1 out of bit 31) is handled explicitly, so divisors
-# >= 2^31 work.   : u/mod 0 swap um/mod ;
-defcode "um/mod",6,,UMDIVMOD
-    checkunderflow 2*CELL
-    lw a2, 0(sp)                # divisor
-    lw t1, CELL(sp)             # hi -> becomes the remainder
-    lw a1, 2*CELL(sp)           # lo -> becomes the quotient
+# >= 2^31 work.
+# clobbers: t2, a3, a4
+udiv64:
     li t2, 32                   # bit counter
-umdm_loop:
+udiv64_loop:
     srli a3, a1, 31             # next dividend bit
     srli a4, t1, 31             # bit about to fall out of the remainder
     slli a1, a1, 1              # bit 0 is now the quotient slot
     slli t1, t1, 1
     or t1, t1, a3
-    bnez a4, umdm_sub           # 33-bit remainder is always >= divisor
-    bltu t1, a2, umdm_next
-umdm_sub:
+    bnez a4, udiv64_sub         # 33-bit remainder is always >= divisor
+    bltu t1, a2, udiv64_next
+udiv64_sub:
     sub t1, t1, a2
     ori a1, a1, 1               # quotient bit = 1
-umdm_next:
+udiv64_next:
     addi t2, t2, -1
-    bnez t2, umdm_loop
+    bnez t2, udiv64_loop
+    ret
+
+.balign CELL
+# sdivmod: signed 32/32 division, truncating (the quotient rounds toward
+# zero and the remainder takes the sign of the dividend, like C).
+# arguments: a1 = dividend, a2 = divisor
+# returns: a1 = quotient, t1 = remainder
+# clobbers: t0, t2, a2, a3, a4, a5, gp, tp
+sdivmod:
+    mv tp, ra                   # udiv64 is called below
+    mv gp, a1                   # the dividend's sign is the remainder's
+    xor a5, a1, a2              # sign of the quotient
+    srai t0, a1, 31
+    xor a1, a1, t0
+    sub a1, a1, t0              # |dividend|
+    srai t0, a2, 31
+    xor a2, a2, t0
+    sub a2, a2, t0              # |divisor|
+    li t1, 0
+    call udiv64
+    bgez a5, sdivmod_rem
+    neg a1, a1
+sdivmod_rem:
+    bgez gp, sdivmod_done
+    neg t1, t1
+sdivmod_done:
+    jr tp
+
+# um/mod ( lo hi u -- rem quot )   Unsigned 64/32 division. Needs hi < u.
+# u = 0 gives quot = -1 instead of trapping.
+defcode "um/mod",6,,UMDIVMOD
+    checkunderflow 2*CELL
+    lw a2, 0(sp)                # divisor
+    lw t1, CELL(sp)             # hi -> becomes the remainder
+    lw a1, 2*CELL(sp)           # lo -> becomes the quotient
+    call udiv64
     addi sp, sp, CELL           # 3 in, 2 out
     sw t1, CELL(sp)             # remainder
     sw a1, 0(sp)                # quotient on top
+    NEXT
+
+# u/mod ( u1 u2 -- rem quot )   Unsigned 32/32 division
+defcode "u/mod",5,,UDIVMOD
+    checkunderflow CELL
+    lw a2, 0(sp)                # divisor
+    lw a1, CELL(sp)             # dividend
+    li t1, 0
+    call udiv64
+    sw t1, CELL(sp)             # remainder
+    sw a1, 0(sp)                # quotient on top
+    NEXT
+
+# /mod ( n1 n2 -- rem quot )   Signed division, truncating: -7 2 /mod gives
+# -1 -3. n2 = 0 does not trap.
+defcode "/mod",4,,DIVMOD
+    checkunderflow CELL
+    lw a2, 0(sp)                # divisor
+    lw a1, CELL(sp)             # dividend
+    call sdivmod
+    sw t1, CELL(sp)             # remainder
+    sw a1, 0(sp)                # quotient on top
+    NEXT
+
+# / ( n1 n2 -- quot )
+defcode "/",1,,DIV
+    checkunderflow CELL
+    POP a2                      # divisor
+    lw a1, 0(sp)                # dividend
+    call sdivmod
+    sw a1, 0(sp)
+    NEXT
+
+# mod ( n1 n2 -- rem )
+defcode "mod",3,,MOD
+    checkunderflow CELL
+    POP a2                      # divisor
+    lw a1, 0(sp)                # dividend
+    call sdivmod
+    sw t1, 0(sp)
     NEXT
 
 # lshift ( x u -- x<<u )  The core uses the low 5 bits of u: u >= 32 wraps.
@@ -762,6 +878,15 @@ defcode "0<",2,,ZLESS
     checkunderflow 0    # need 1 item
     lw t1, 0(sp)
     srai t1, t1, 31     # arithmetic shift: sign bit fills the word
+    sw t1, 0(sp)
+    NEXT
+
+# 0> ( n -- f )         True if n is positive
+defcode "0>",2,,ZGREATER
+    checkunderflow 0
+    lw t1, 0(sp)
+    sgtz t1, t1
+    neg t1, t1
     sw t1, 0(sp)
     NEXT
 
@@ -943,6 +1068,25 @@ fn_found:
     PUSH t2
     NEXT
 
+# count ( a -- a+1 u )  Split a counted string into its text and its length
+defcode "count",5,,COUNT
+    checkunderflow 0
+    lw a1, 0(sp)
+    lbu a2, 0(a1)               # the count byte
+    addi a1, a1, 1
+    sw a1, 0(sp)
+    PUSH a2
+    NEXT
+
+# type ( a u -- )       Send u characters starting at a to the console
+defcode "type",4,,TYPE
+    checkunderflow CELL
+    POP a2                      # u
+    POP a1                      # a
+    add a2, a1, a2              # uart_print wants start and end
+    call uart_print             # (clobbers a0, a1, t0, t1)
+    NEXT
+
 ##
 # Compiler and dictionary
 ##
@@ -1064,6 +1208,19 @@ memory_error:
     lw t2, 0(t2)        # load the address value into temporary
     restorevars t2      # restore HERE and LATEST (t2)
     j err_mem
+
+# [ ( -- )              Switch to interpret state (immediate)
+defcode "[",1,F_IMMEDIATE,LBRAC
+    li t1, var_STATE
+    sw zero, 0(t1)
+    NEXT
+
+# ] ( -- )              Switch to compile state
+defcode "]",1,,RBRAC
+    li t1, var_STATE
+    li t2, 1
+    sw t2, 0(t1)
+    NEXT
 
 # create ( "name" -- )  Build a header at HERE; the word pushes its pfa (the
 # first data cell, after the code field and the DOES> slot) when executed.
@@ -1226,6 +1383,39 @@ defcode "emit",4,,EMIT
     checkunderflow 0    # check for stack underflow of data stack (1 CELL)
     POP a0              # copy top of data stack into W
     call uart_put       # send character from W to uart
+    NEXT
+
+# space ( -- )          Send one space
+defcode "space",5,,SPACE
+    li a0, CHAR_SPACE
+    call uart_put
+    NEXT
+
+# cr ( -- )             Send CR LF
+defcode "cr",2,,CR
+    li a0, CHAR_CARRIAGE
+    call uart_put
+    li a0, CHAR_NEWLINE
+    call uart_put
+    NEXT
+
+# bl ( -- 32 )          The space character
+defcode "bl",2,,BL
+    li t1, CHAR_SPACE
+    PUSH t1
+    NEXT
+
+# base ( -- addr )      Number base of the output words (. u. #). Number
+# input does not use it: see `number`.
+defcode "base",4,,BASE
+    li t1, var_BASE
+    PUSH t1
+    NEXT
+
+# hld ( -- addr )       Pointer into the number being built by <# # #>
+defcode "hld",3,,HLD
+    li t1, var_HLD
+    PUSH t1
     NEXT
 
 ##

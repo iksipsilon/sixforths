@@ -65,6 +65,7 @@ _start:
 .include "07-error-handling.s"
 .include "08-primitives.s"        # every machine-code word, sorted by function (CH32V006 port)
 .include "09-interpreter.s"
+.include "10-forth-words.s"       # colon words kept in flash as threads (CH32V006 port)
 .include "12-flash-log.s"         # source-replay log: flash persistence (CH32V006 port)
 
 # CH32V006 PORT: header of the last word in flash. defcode/defword chain the
