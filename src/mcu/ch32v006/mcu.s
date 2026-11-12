@@ -89,6 +89,15 @@
 .equ STK_CTLR_STRE, (1 << 3)    # 1: restart from 0 at the compare value, 0: keep counting up
 .equ STK_TICKS_PER_MS, CPU_FREQ / 8 / 1000   # HCLK/8 = 3 MHz: 3000 ticks per ms
 
+# CH32V006 PORT: the tick interrupt (13-ticks.s), SysTick's compare match
+.equ IRQ_SYSTICK, 12            # RM 6.2: interrupt 12, vector table entry 12 (address 0x30)
+.equ PFIC_IENR0, 0xE000E100     # processor manual 3.1, Table 3-2: interrupt enable set,
+                                # bit n lets interrupt n through (write 1, write-only)
+.equ CSR_INTSYSCR, 0x804        # processor manual 3.2: interrupt system control
+.equ INTSYSCR_HWSTKEN, (1 << 0) # HPE on (3.4); INESTEN (bit 1, nesting) stays 0
+.equ TICK_PERIOD, STK_TICKS_PER_MS * 2   # a tick every 2 ms
+.equ TICK_MARGIN, 100           # ticks (33 us): how far ahead of the count a new compare must be
+
 ##
 # Modem UART - CH32V006 PORT, for 14-modem.s: USART2 on PD2 (TX) / PD3 (RX),
 # its receiver emptied by DMA1 channel 7. Reference manual V1.5 sections given.

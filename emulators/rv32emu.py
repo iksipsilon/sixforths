@@ -54,6 +54,20 @@ class Emu:
         self.stk_ctlr = 0        # STK_CTLR
         self.stk_cnt0 = 0        # the count at cycle stk_at
         self.stk_at = 0
+        # SysTick's compare match and its interrupt, the only one modelled.
+        # CNTIF (STK_SR bit 0) is set when the count reaches CMPLR; with STIE,
+        # PFIC_IENR0 bit 12 and mstatus.MIE the core takes interrupt 12:
+        # HPE (INTSYSCR bit 0, processor manual 3.4) stores x1, x5-x7,
+        # x10-x15 at sp-4 ... sp-40 and moves sp down 48 bytes; mepc, mcause,
+        # MPIE = MIE, MIE = 0; the handler address comes from the vector
+        # table (mtvec MODE = 11). mret undoes it. Nesting, HPE off and other
+        # mtvec modes fault.
+        self.stk_cmp = 0         # STK_CMPLR
+        self.stk_cntif = 0       # STK_SR bit 0
+        self.stk_match_at = None # the cycle at which the count next equals CMPLR
+        self.pfic_ienr0 = 0      # PFIC_IENR0: bit n lets interrupt n through
+        self.hpe_depth = 0       # HPE frames pushed and not yet popped by mret
+        self.irqs_taken = 0
         # The modem line: USART2 (reference manual 14.8) received by DMA1
         # channel 7 (8.3). A test puts the modem's bytes in uart2_in; one
         # arrives every uart2_period instructions (2083: one byte at 115200
@@ -102,6 +116,29 @@ class Emu:
         div = 1 if self.stk_ctlr & 4 else 8         # STCLK
         return (self.stk_cnt0 + (self.cycles - self.stk_at) // div) & M32
 
+    def stk_rearm(self):
+        # the first cycle from now at which the count equals CMPLR
+        if not self.stk_ctlr & 1:
+            self.stk_match_at = None; return
+        div = 1 if self.stk_ctlr & 4 else 8
+        k = (self.cycles - self.stk_at) // div + ((self.stk_cmp - self.stk_cnt()) & M32)
+        self.stk_match_at = self.stk_at + k * div
+
+    def take_irq(self, n):
+        mtvec, ms = self.csr.get(0x305, 0), self.csr.get(0x300, 0)
+        if not self.csr.get(0x804, 0) & 1 or self.csr.get(0x804, 0) & 2 or mtvec & 3 != 3:
+            self.fault = ("irq-setup-unmodelled", self.pc, self.csr.get(0x804, 0)); raise RuntimeError()
+        sp = self.x[2]
+        for off, r in zip(range(4, 44, 4), (1, 5, 6, 7, 10, 11, 12, 13, 14, 15)):
+            self.w32((sp - off) & M32, self.x[r])
+        self.x[2] = (sp - 48) & M32
+        self.hpe_depth += 1
+        self.csr[0x300] = (ms & ~0x88) | (0x80 if ms & 8 else 0)    # MPIE = MIE, MIE = 0
+        self.csr[0x341] = self.pc                                  # mepc
+        self.csr[0x342] = 0x80000000 | n                           # mcause: interrupt n
+        self.pc = self.r32((mtvec & ~3) + 4 * n)
+        self.irqs_taken += 1
+
     def _flash_pa(self, a):
         # normalize a flash address (0x00000000 alias or 0x08000000 base)
         if 0x08000000 <= a < 0x08010000: return a - 0x08000000
@@ -141,7 +178,11 @@ class Emu:
             return self.stk_ctlr
         if a == 0xE000F008:  # STK_CNTL
             return self.stk_cnt()
-        if 0xE000F000 <= a < 0xE000F020:  # STK_SR, STK_CMPLR: not modelled
+        if a == 0xE000F004:  # STK_SR: CNTIF
+            return self.stk_cntif
+        if a == 0xE000F010:  # STK_CMPLR
+            return self.stk_cmp
+        if 0xE000F000 <= a < 0xE000F020:  # the rest of the block: not modelled
             self.fault = ("stk-unmodelled", self.pc, a); raise RuntimeError()
         if a in self.rcc:    # RCC_HBPCENR, RCC_PB2PCENR
             return self.rcc[a]
@@ -171,14 +212,23 @@ class Emu:
             self.fault = ("misaligned-store", self.pc, a); raise RuntimeError()
         self.stores.append((self.pc, a, v & M32)); self.stores = self.stores[-16:]
         if a == 0x40013804: self.uart_out.append(v & 0xFF); return
-        if a == 0xE000F000:  # STK_CTLR: only STE (bit 0) and STCLK (bit 2) are modelled
-            if v & ~0x5 & M32:
+        if a == 0xE000F000:  # STK_CTLR: STE (bit 0), STIE (bit 1), STCLK (bit 2)
+            if v & ~0x7 & M32:
                 self.fault = ("stk-unmodelled", self.pc, a); raise RuntimeError()
             self.stk_cnt0, self.stk_at = self.stk_cnt(), self.cycles  # keep the count
-            self.stk_ctlr = v & M32; return
+            self.stk_ctlr = v & M32; self.stk_rearm(); return
         if a == 0xE000F008:  # STK_CNTL: the counter goes on from the written value
-            self.stk_cnt0, self.stk_at = v & M32, self.cycles; return
-        if 0xE000F000 <= a < 0xE000F020:  # STK_SR, STK_CMPLR: not modelled
+            self.stk_cnt0, self.stk_at = v & M32, self.cycles; self.stk_rearm(); return
+        if a == 0xE000F004:  # STK_SR: writing 0 clears CNTIF, writing 1 does nothing
+            if not v & 1: self.stk_cntif = 0
+            return
+        if a == 0xE000F010:  # STK_CMPLR
+            self.stk_cmp = v & M32; self.stk_rearm(); return
+        if a == 0xE000E100:  # PFIC_IENR0: write 1 to let interrupt n through (only 12 here)
+            if v & ~(1 << 12) & M32:
+                self.fault = ("pfic-unmodelled", self.pc, v); raise RuntimeError()
+            self.pfic_ienr0 |= v & M32; return
+        if 0xE000F000 <= a < 0xE000F020:  # the rest of the block: not modelled
             self.fault = ("stk-unmodelled", self.pc, a); raise RuntimeError()
         if a in self.rcc:    # RCC_HBPCENR, RCC_PB2PCENR
             self.rcc[a] = v & M32; return
@@ -309,6 +359,13 @@ class Emu:
         self.cycles += 1         # SysTick model: one HCLK cycle per instruction
         if self.uart2_in and self.cycles >= self.uart2_next:
             self.uart2_deliver()     # the next modem byte arrives
+        if self.stk_match_at is not None and self.cycles >= self.stk_match_at:
+            self.stk_cntif = 1       # the count reached CMPLR; next match a whole wrap later
+            self.stk_match_at += (1 << 32) * (1 if self.stk_ctlr & 4 else 8)
+        if (self.stk_cntif and self.stk_ctlr & 2 and self.pfic_ienr0 & (1 << 12)
+                and self.csr.get(0x300, 0) & 8):
+            self.take_irq(12)        # the tick interrupt
+            pc = self.pc
         lo = self.r16(pc)
         self.trace.append(pc); self.trace = self.trace[-64:]
         if (lo & 3) != 3:
@@ -373,7 +430,15 @@ class Emu:
             elif f3 == 6: self.wr(rd, a | b)
             elif f3 == 7: self.wr(rd, a & b)
         elif op == 0x73:                                                    # csr / mret
-            if inst == 0x30200073:  # mret
+            if inst == 0x30200073:  # mret: HPE restores the frame, MIE = MPIE
+                if self.hpe_depth:
+                    sp = (self.x[2] + 48) & M32
+                    for off, r in zip(range(4, 44, 4), (1, 5, 6, 7, 10, 11, 12, 13, 14, 15)):
+                        self.x[r] = self.r32((sp - off) & M32)
+                    self.x[2] = sp
+                    self.hpe_depth -= 1
+                ms = self.csr.get(0x300, 0)
+                self.csr[0x300] = (ms & ~0x8) | (0x8 if ms & 0x80 else 0) | 0x80
                 self.pc = self.csr.get(0x341, 0); return
             csr = inst >> 20
             old = self.csr.get(csr, 0)

@@ -32,8 +32,9 @@ hardware.
   and on programming a page that is not erased.
 - Trap handler (`src/03-interrupts.s`) prints `T<mcause> <mepc>` in hex over UART and
   hangs. Traps use a vector table at 0x0 (`_start` in `sixforths.s`, `mtvec` = 3; the V2
-  needs the table 1 KiB aligned): entry 0 = reset jump, 2 = NMI, 3 = every exception.
-  Only these entries exist; enabling an interrupt needs a longer table. **Never tell
+  needs the table 1 KiB aligned): entry 0 = reset jump, 2 = NMI, 3 = every exception,
+  12 = the SysTick tick (`tick_isr`). Entries 0-12 exist; enabling another interrupt needs
+  the table extended to its number. **Never tell
   reset from a trap by `mcause`: on silicon it is not 0 after reset** (read 0x800000D9).
   Do not put a `.balign 1024` back; it cost ~1.6 KB of padding. If the board prints that, the code did something illegal at that address.
 - Holding **PD4 high at reset skips the source-replay log** (see below). This is the
@@ -59,7 +60,10 @@ hardware.
   `sp` (hardware prologue, processor manual 3.4), and `sp` is the data stack. PUSH and
   PUSHRSP therefore move the pointer first, then store; to push `sp` itself, copy it to a
   register first (see `sp@`). `IRQ_FRAME` (48 bytes) stays free under the data stack for one
-  frame, so it holds 52 cells and interrupts must not nest.
+  frame, so it holds 52 cells and interrupts must not nest. **`sp` must change in one
+  instruction**: `la sp, x` takes two, and a tick between them stores its frame through a
+  half-built `sp` (load the address into a register, then `mv sp`). The tick is on from
+  `reset` onwards, so this holds for all code that runs after boot.
 - Indirect threaded. Word header: link cell, flags+length byte, name, zero padding to
   a cell boundary, then the code field. Flags: `F_IMMEDIATE` 0x80, `F_HIDDEN` 0x20,
   `F_LENMASK` 0x1f, so **names are at most 31 characters**.
@@ -99,7 +103,7 @@ hardware.
 
 - Flash 0x00000000: kernel + `.rodata`, **must stay under 16 KiB** (`FLASH` `LENGTH` in
   `src/board/ch32v006f8u6/linker.ld`; confirm it says 16k).
-  Currently 13,384 bytes (181 words). Report the size after every change.
+  Currently 13,596 bytes (182 words). Report the size after every change.
 - Flash 0x08004000-0x08006800: source-replay log (10 KiB).
 - Flash 0x08006800-0x0800F800 (`USER_FLASH`..`FLASH_TOP`, 36 KiB): the application's own
   data, written a 256-byte page at a time with `fpage-erase ( page -- )` and
@@ -108,14 +112,15 @@ hardware.
   see `etc/answers.md`). The phonebook and the SMS stay on the SIM.
 - RAM 0x20000000: the user dictionary grows up from here (`HERE`). It is **empty after
   boot**: every kernel word lives in flash.
-  `FORTH_SIZE` = 0x19B8 = **6,584 bytes** of dictionary budget, up to `DICT_TOP` (which is
+  `FORTH_SIZE` = 0x19B4 = **6,580 bytes** of dictionary budget, up to `DICT_TOP` (which is
   `MRING` now).
 - RAM, top down: `DSP_TOP` 0x20002000, `RSP_TOP` 0x20001F00, `TIB_TOP` 0x20001E00,
   `TIB_BOTTOM` 0x20001D00 (256 B), `var_STATE` 0x20001CFC, `var_TOIN` 0x20001CF8,
   `var_HERE` 0x20001CF4, `var_LATEST` 0x20001CF0, then log bookkeeping, `var_BASE`
   0x20001CD8, `var_HLD`, `var_CONTEXT`, `var_CURRENT`, `var_VOCLINK` 0x20001CC8, `var_MRD`,
-  `var_MTIMEOUT` 0x20001CC0, `var_OUT`, `var_IN` 0x20001CB8 (the I/O vectors), `PAD`
-  0x20001BB8, `LOGBUF` 0x20001AB8, `MRING` 0x200019B8 (the modem's 256-byte receive ring)
+  `var_MTIMEOUT` 0x20001CC0, `var_OUT`, `var_IN` 0x20001CB8 (the I/O vectors), `var_IRQS`
+  0x20001CB4, `PAD` 0x20001BB4, `LOGBUF` 0x20001AB4, `MRING` 0x200019B4 (the modem's
+  256-byte receive ring)
   = `DICT_TOP`. RAM-variable cells are named `var_X` as in jonesforth, so the bare names
   stay free for word labels; `TIB_BOTTOM` is the start of the input buffer.
   New buffers (modem line, display frame, SD sectors) are carved out below the lowest one
@@ -198,7 +203,8 @@ Layout:
   code (`type`: 32 bytes against 64); words that mostly call other words are shorter and
   safer as threads.
 - `src/12-flash-log.s` holds the source log and the user flash page words.
-- `src/13-ticks.s` holds `ticks` and `ms` (SysTick, polled).
+- `src/13-ticks.s` holds `ticks` and `ms` (SysTick, polled), the tick interrupt `tick_isr`
+  and `irqs`.
 - `src/14-modem.s` holds the modem UART: USART2 received by DMA into `MRING`, and the
   words `mkey?` `mkey` `memit` `mtimeout` `>modem` `<modem`.
 - `emulators/` holds `rv32emu.py` (the owner's RV32EC emulator: alignment, RV32E register
@@ -267,7 +273,9 @@ to test on the board. The reasons behind each choice are in `etc/answers.md`.
 Rules for all of it:
 - The emulator models SysTick (one HCLK cycle per instruction), USART2 and DMA channel 7
   (a test puts the modem's bytes in `uart2_in`; `uart2_loopback` is a PD2-PD3 wire), and
-  faults on the parts of them it does not model. It has no TIMx and no interrupt model.
+  faults on the parts of them it does not model. Interrupts: SysTick's compare interrupt
+  (12) only, with the HPE frame and `mret` (nesting, HPE off and other `mtvec` modes
+  fault); a test can hold it off by clearing MIE in `e.csr[0x300]`. It has no TIMx.
   Before writing a driver, add
   the smallest model of that device to `emulators/rv32emu.py` so the words can be tested
   there, and say plainly which part can only be checked on the board.
@@ -278,8 +286,8 @@ Rules for all of it:
   file once pins are assigned (the QFN20 has few: count them before promising one).
 - Interrupts: at most **one**, and it must not nest. Its routine may use only `ra`,
   `t0-t2`, `a0-a5` (the hardware prologue saves exactly those) and must not touch `sp`,
-  `s0`, `s1`, `gp`, `tp`. The vector table in `sixforths.s` has four entries; an interrupt
-  needs it extended to its number. HPE and the vector mode are set in CSRs described in
+  `s0`, `s1`, `gp`, `tp`. The one interrupt is the tick (step 5a), vector table entry 12;
+  another would need the table extended to its number. HPE and the vector mode are set in CSRs described in
   `docs/ch32v006/QingKeV2_Processor_Manual.PDF` chapter 3.
 - Everything that waits (for the modem, for a key) needs a timeout. A phone must not hang.
 
@@ -352,7 +360,16 @@ The steps:
    put both vectors back on the console.
 5. **Tick interrupt** (about every 2 ms): refresh one LED row
    (`docs/output/LED-matrix/Bitbang-LED-matrix.S` already keeps to the allowed registers),
-   sample the 8 keys through the 74HC165, count time. This is the one interrupt.
+   sample the 8 keys through the 74HC165, count time. This is the one interrupt. Split in
+   three (the owner, 2026-11-12; nothing is wired yet):
+   - 5a, the tick itself. **Done in the emulator 2026-11-12, not yet on the board.**
+     SysTick's compare interrupt every `TICK_PERIOD` (6000 ticks = 2 ms); the counter runs
+     free, so `ticks` `ms` `mkey` are unchanged. `tick_isr` puts the next compare one period
+     on, or one period after now when it ran late (flash work holds the core up; a compare
+     in the past would not match again for 23.9 minutes), and counts `irqs`. HPE is on, so
+     traps stack a frame too. On the board: `irqs 1000 ms irqs swap - .` should be about 500.
+   - 5b, the LED row refresh in the tick (pins PC0, PC2, PA1, PA2; needs the matrix wired).
+   - 5c, the keys through the 74HC165 (shares CLK and OE, one more input pin; not tried).
 6. **Key input**: chords are decoded on release (OR everything pressed since the first
    press, report it when all keys are up). Characters are entered with two strokes through
    a 64-byte table, `map[8 * first + second]`.

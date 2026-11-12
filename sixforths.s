@@ -43,8 +43,9 @@ Copyright (c) 2021~ Alexander Williams, https://a1w.ca
 # CH32V006 PORT: a vector table at 0x0, as in WCH's startup code. Reset
 # always starts at 0x0; mtvec = 0x0 | 3 (vectored, entries are addresses)
 # sends an NMI to entry 2 and every exception to entry 3 (EXC). The QingKe V2
-# needs the table 1 KiB aligned, and 0x0 is. Only entries 0-3 exist: enabling
-# any interrupt needs a longer table. Never tell reset from a trap by mcause:
+# needs the table 1 KiB aligned, and 0x0 is. Entries 0-12 exist: 12 is the
+# SysTick tick (13-ticks.s), the only interrupt; enabling another one needs
+# the table extended to its number. Never tell reset from a trap by mcause:
 # on silicon it is not 0 after reset (the board read 0x800000D9).
 .text
 .global _start
@@ -56,6 +57,8 @@ _start:
     .word 0                         # 0x04: vector 1, reserved
     .word interrupt_handler         # 0x08: vector 2, NMI
     .word interrupt_handler         # 0x0C: vector 3, EXC (all exceptions)
+    .word 0, 0, 0, 0, 0, 0, 0, 0    # 0x10-0x2C: vectors 4-11, reserved or not enabled
+    .word tick_isr                  # 0x30: vector 12, SysTick: the tick (13-ticks.s)
 .option pop
 
 # include board-specific functions and constants from src/boards/<board>/

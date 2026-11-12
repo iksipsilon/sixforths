@@ -91,7 +91,13 @@ reset_replay_done:
     sw zero, 0(t0)      # drop any pending (uncommitted) log batch
 
     # initialize stack pointers
-    la sp, __stacktop           # initialize DSP register
+    # CH32V006 PORT: sp changes in one instruction (la takes two): the tick
+    # interrupt's HPE stores its frame below sp at any moment
+    la t0, __stacktop
+    mv sp, t0                   # initialize DSP register
+    # CH32V006 PORT: interrupts on (the tick, 13-ticks.s), now that sp is valid.
+    # At boot this is the first time; after an error they are on already.
+    csrs mstatus, 0x08
     la s1, interpreter_start    # initialize IP register
     li s0, RSP_TOP              # initialize RSP register
 

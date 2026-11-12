@@ -379,13 +379,52 @@ e, out, _ = h.session(P, "0x0800F7FF fpage-erase 0x08006800 fpage-erase 65 emit\
 check("first and last user page are allowed", e, out, ["emit\nA"])
 
 # ---- ticks and ms (the emulator's SysTick counts one HCLK cycle per instruction) ----
-t("SysTick runs on HCLK/8, no reload, no interrupt", "0xE000F000 @ .", "1 ")
+t("SysTick runs on HCLK/8, no reload, compare interrupt on", "0xE000F000 @ .", "\n3 ")
 t("ticks advances, by less than 1 ms", "ticks ticks swap - dup 0> . 3000 < .", "-1 -1 ")
 t("10 ms waits 30000 ticks", "ticks 10 ms ticks swap - dup 30000 < . 33000 < .", "0 -1 ")
 t("0 ms and -5 ms return at once", "ticks 0 ms -5 ms ticks swap - 3000 < .", "-1 ")
 t("ms across the wrap", "0xFFFFF000 0xE000F008 ! ticks 2 ms ticks over 0xF0000000 u> . dup 0x10000 u< . swap - dup 6000 < . 9000 < .",
   "-1 -1 0 -1 ")
 t("ms on an empty stack", "ms", "? stack underflow", absent=())
+
+# ---- the tick: SysTick's compare interrupt every 2 ms (HPE frame below sp, mret) ----
+t("10 ticks in 20 ms", "irqs 20 ms irqs swap - dup 9 < . 11 > .", "\n0 0 ")
+t("the next compare is ahead of the count", "0xE000F010 @ ticks - dup 0> . 6001 < .", "\n-1 -1 ")
+e = copy.deepcopy(P)
+e.csr[0x300] &= ~8                                  # interrupts held off for 30 ms, as by flash work
+h.feed(e, "30 ms\n")
+pending = e.stk_cntif
+e.csr[0x300] |= 8
+out, _ = h.feed(e, "irqs 20 ms irqs swap - dup 9 < . 11 > .\n")
+check("after a 30 ms stall the tick goes on", e, out + f" pending={pending}", ["\n0 0 ", "pending=1"])
+e, out, _ = h.session(P, ": deep 40 0 do i loop 20 ms 0 40 0 do swap 39 i - <> if 1+ then loop ; deep .\n")
+check("a 40-cell data stack survives 20 ms of ticks", e, out + f" enough={e.irqs_taken - P.irqs_taken >= 9}",
+      ["deep .\n0 ", "enough=True"])
+t("the tick runs after reboot", "reboot\nirqs 20 ms irqs swap - dup 9 < . 11 > .", "\n0 0 ")
+t("the tick runs after an error", "nosuchword\nirqs 20 ms irqs swap - dup 9 < . 11 > .", "\n0 0 ", absent=())
+# a tick just before any instruction of reset (the error path) does no harm: sp never half set
+lo, hi = h.SYM["reset"], h.SYM["ram_init"]
+e = copy.deepcopy(P); e.uart_in = list(b"nosuchword\n")
+seen = []
+for _ in range(200_000):
+    if lo <= e.pc < hi and e.pc not in seen:
+        seen.append(e.pc)
+    if e.pc == h.IDLE and not e.uart_in:
+        break
+    e.step()
+bad = []
+for a in seen:
+    e = copy.deepcopy(P); e.uart_in = list(b"nosuchword\n65 emit\n")
+    for _ in range(200_000):
+        if e.pc == a:
+            break
+        e.step()
+    e.stk_cntif = 1                                 # the tick arrives right now
+    taken = e.irqs_taken
+    h.run_idle(e)
+    if e.fault or "emit\nA" not in bytes(e.uart_out).decode("latin1") or e.irqs_taken == taken:
+        bad.append(hex(a))
+check(f"a tick before each of the {len(seen)} instructions of reset", e, f"bad={bad}", ["bad=[]"])
 
 # ---- modem: USART2 + DMA channel 7 into the ring (the emulator delivers a byte per 2083 instructions) ----
 def tm(name, src, *expect, modem=b"", loop=False, absent=("  ?",)):
@@ -452,7 +491,7 @@ e, out, _ = h.session(P, "words\n")
 names = out.split("\n")[1].split()                # line 0 is the echoed input
 print("word count:", len(names))
 check("words lists new primitives", e, out, ["um/mod", "xdoes", "find-name", "parse", "um*", "quit"])
-check("words lists the modem words, then ms and ticks", e, out, ["\n <modem >modem mtimeout memit mkey mkey? ms ticks wipe "])
+check("words lists the modem words, then ms and ticks", e, out, ["\n <modem >modem mtimeout memit mkey mkey? ms ticks irqs wipe "])
 
 print("\nALL PASS" if failures == 0 else f"\n{failures} FAILURES")
 sys.exit(1 if failures else 0)

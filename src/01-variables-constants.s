@@ -54,7 +54,9 @@
 # console: its echo, ok and the error messages do not follow these.
 .equ var_OUT, var_MTIMEOUT - CELL       # 1 CELL: output routine (see >console >modem)
 .equ var_IN, var_OUT - CELL             # 1 CELL: input table (see <console <modem)
-.equ PAD, var_IN - (CELL * 64)          # 64 CELLS between var_IN and PAD
+# CH32V006 PORT: tick interrupts taken since boot (13-ticks.s, see irqs)
+.equ var_IRQS, var_IN - CELL            # 1 CELL
+.equ PAD, var_IRQS - (CELL * 64)        # 64 CELLS between var_IRQS and PAD
 # CH32V006 PORT: pending batch buffer for the log. Lines of a multi-line
 # definition are held here and committed to flash only when a line ends with
 # STATE = 0, so a definition reaches the log whole or not at all.
