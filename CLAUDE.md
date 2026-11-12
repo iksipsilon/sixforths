@@ -337,7 +337,7 @@ The steps:
    error, and neither `reboot` nor a hardware reset left a junk byte. Not yet: the A7670E
    itself (read the HAT schematic in `docs/A7670X` for its UART voltage first). Found on the way: the interpreter compiled into a
    definition with no bounds check, and `;` unhid before its check (fixed, `b13ad53`).
-4. **Vectored `emit` and `key`.** **Done in the emulator 2026-11-12, not yet on the board.**
+4. **Vectored `emit` and `key`.** **Done 2026-11-12, checked on the board** (D2-D3 wire).
    `var_OUT` holds the routine `emit` `space` `cr` `type` `words` (and so `.` `u.` `."` `.s`
    `dump`) send through; `var_IN` points at an input table (get, ready) that `key` and `key?`
    use. `>console` `>modem` and `<console` `<modem` set them (step 6 adds the keypad,
@@ -346,6 +346,10 @@ The steps:
    `reset` (boot and every error) sets both vectors back to the console. `mkey?` `mkey`
    `memit` stay as words of their own: the phone's main loop polls the console, the modem
    and the keys side by side. The owner moved the error part of this step to step 7.
+   On the board: `>modem 65 emit >console mkey .` printed 65, `."` and `.` went out
+   through the vector, `<modem` `key` read the wire and timed out with -1 after 10 ms,
+   `>modem` stayed set across lines with the echo and `ok` on the console, and an error
+   put both vectors back on the console.
 5. **Tick interrupt** (about every 2 ms): refresh one LED row
    (`docs/output/LED-matrix/Bitbang-LED-matrix.S` already keeps to the allowed registers),
    sample the 8 keys through the 74HC165, count time. This is the one interrupt.
