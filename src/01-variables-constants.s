@@ -50,8 +50,13 @@
 .equ LOGBUF_SIZE, 256
 .equ LOGBUF, PAD - LOGBUF_SIZE
 
+# CH32V006 PORT: the top of the user dictionary is the lowest buffer. Every
+# dictionary bounds check and the error path's zero-fill stop at DICT_TOP, so
+# a new buffer is carved out below the lowest one and DICT_TOP moves to it.
+.equ DICT_TOP, LOGBUF
+
 # dictionary grows upward from the RAM base address
-.equ FORTH_SIZE, LOGBUF - RAM_BASE      # remaining memory for Forth
+.equ FORTH_SIZE, DICT_TOP - RAM_BASE    # remaining memory for Forth
 
 ##
 # Flash layout (CH32V006 PORT)

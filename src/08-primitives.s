@@ -502,7 +502,7 @@ defcode "allot",5,,ALLOT
     li t2, var_HERE
     lw a4, 0(t2)
     add a4, a4, t1
-    li a5, LOGBUF
+    li a5, DICT_TOP
     bge a4, a5, err_mem
     sw a4, 0(t2)
     NEXT
@@ -517,7 +517,7 @@ defcode ",",1,,COMMA
     lw a4, 0(t2)        # current HERE value
     addi a4, a4, CELL-1 # round it up to a CELL boundary
     andi a4, a4, -CELL
-    li a5, LOGBUF       # dictionary bounds check, like COLON's
+    li a5, DICT_TOP     # dictionary bounds check, like COLON's
     bge a4, a5, err_mem
     sw t1, 0(a4)        # store the cell
     addi a4, a4, CELL
@@ -531,7 +531,7 @@ defcode "c,",2,,CCOMMA
     POP a1
     li t2, var_HERE
     lw a4, 0(t2)
-    li a5, LOGBUF               # dictionary bounds check, like `,`
+    li a5, DICT_TOP             # dictionary bounds check, like `,`
     bge a4, a5, err_mem
     sb a1, 0(a4)
     addi a4, a4, 1
@@ -1181,7 +1181,7 @@ defcode ":",1,,COLON
     addi a5, a5, 2*CELL # ...+ link + count byte + alignment slack (4 + 1 + 3)
     andi a5, a5, -CELL  # a5 = code field address (CELL-aligned)
     addi gp, a5, CELL   # gp = new HERE (just after the code field)
-    li tp, LOGBUF       # load out of bounds memory address (LOGBUF)
+    li tp, DICT_TOP     # load out of bounds memory address (DICT_TOP)
     bge gp, tp, err_mem # error if the memory address is out of bounds
 
     # link field: address of the previous word of the CURRENT vocabulary
@@ -1236,22 +1236,27 @@ colon_code:
 
 # ; ( -- )              # End the definition of a new word
 defcode ";",1,F_IMMEDIATE,SEMI
-    # unhide the word
-    li t0, var_CURRENT  # the word being compiled is the newest of CURRENT
-    lw t0, 0(t0)        # load the address of the head cell
-    lw t0, 0(t0)        # load the address of the word
-    lbu t1, CELL(t0)    # load the flags+length byte into temporary
-    andi t1, t1, ~F_HIDDEN # unhide the word
-    sb t1, CELL(t0)     # write the flags+length byte back to memory
-
-    # store codeword into memory
+    # CH32V006 PORT BUGFIX: check for room first and unhide after. The word
+    # used to be unhidden first, so a `;` that found the dictionary full left
+    # the unfinished word (with no EXIT) defined: abandon_def drops only a
+    # hidden word.
     li t0, var_HERE     # copy the memory address of HERE into temporary
     lw t2, 0(t0)        # load the HERE value into temporary
 
     # bounds check on the exit memory location
-    li a4, LOGBUF       # load out of bounds memory address (LOGBUF)
+    li a4, DICT_TOP     # load out of bounds memory address (DICT_TOP)
     bge t2, a4, err_mem # error if the memory address is out of bounds
                         # (reset then drops the unfinished word: abandon_def)
+
+    # unhide the word
+    li a1, var_CURRENT  # the word being compiled is the newest of CURRENT
+    lw a1, 0(a1)        # load the address of the head cell
+    lw a1, 0(a1)        # load the address of the word
+    lbu t1, CELL(a1)    # load the flags+length byte into temporary
+    andi t1, t1, ~F_HIDDEN # unhide the word
+    sb t1, CELL(a1)     # write the flags+length byte back to memory
+
+    # store codeword into memory
 
     la t1, EXIT         # load the codeword address into temporary
     sw t1, 0(t2)        # store the codeword address into HERE
@@ -1356,7 +1361,7 @@ defcode "'",1,F_IMMEDIATE,TICK
     la t1, LIT          # compile: LIT codeword cell, then the cfa cell
     li t2, var_HERE
     lw a4, 0(t2)
-    li a5, LOGBUF-CELL  # need room for two cells
+    li a5, DICT_TOP-CELL # need room for two cells
     bge a4, a5, err_mem
     sw t1, 0(a4)
     sw a0, CELL(a4)

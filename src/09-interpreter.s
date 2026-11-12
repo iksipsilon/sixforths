@@ -176,10 +176,13 @@ execute_done:
 compile:
     mv a0, a1               # copy the word header address into W
     call to_cfa             # compute the code field address (variable-length names)
-    mv t0, a0               # copy the code field address into temporary
     li t1, var_HERE         # load HERE variable into temporary
     lw t2, 0(t1)            # load HERE value into temporary
-    sw t0, 0(t2)            # write the address of the codeword to the current definition
+    # CH32V006 PORT BUGFIX: dictionary bounds check, like `,` (there was none,
+    # so a long definition could run past the dictionary into the buffers)
+    li t0, DICT_TOP
+    bge t2, t0, err_mem
+    sw a0, 0(t2)            # write the code field address (still in W) to the current definition
 
     addi t0, t2, CELL       # increment HERE by 4
     sw t0, 0(t1)            # store new HERE address
@@ -192,9 +195,12 @@ push_number:
     lw t1, 0(t1)            # load the current state into a temporary
     beqz t1, push_stack     # if in execute mode, push the number to the stack
     # push to memory if STATE = 1 (compile)
-    la t0, LIT              # load the codeword address of LIT into temporary
     li t1, var_HERE         # load HERE variable into temporary
     lw t2, 0(t1)            # load HERE value into temporary
+    # CH32V006 PORT BUGFIX: room for two cells, like ['] (there was no check)
+    li t0, DICT_TOP-CELL
+    bge t2, t0, err_mem
+    la t0, LIT              # load the codeword address of LIT into temporary
     sw t0, 0(t2)            # write the codeword address of LIT to memory (HERE)
     sw a0, 4(t2)            # write the number from W to the next memory cell (HERE+4)
     addi t0, t2, 2*CELL     # increment HERE by 2 CELLs

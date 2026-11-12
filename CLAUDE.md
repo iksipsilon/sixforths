@@ -99,7 +99,7 @@ hardware.
 
 - Flash 0x00000000: kernel + `.rodata`, **must stay under 16 KiB** (`FLASH` `LENGTH` in
   `src/board/ch32v006f8u6/linker.ld`; confirm it says 16k).
-  Currently 12,412 bytes (173 words). Report the size after every change.
+  Currently 12,432 bytes (173 words). Report the size after every change.
 - Flash 0x08004000-0x08006800: source-replay log (10 KiB).
 - Flash 0x08006800-0x0800F800 (`USER_FLASH`..`FLASH_TOP`, 36 KiB): the application's own
   data, written a 256-byte page at a time with `fpage-erase ( page -- )` and
@@ -108,15 +108,18 @@ hardware.
   see `etc/answers.md`). The phonebook and the SMS stay on the SIM.
 - RAM 0x20000000: the user dictionary grows up from here (`HERE`). It is **empty after
   boot**: every kernel word lives in flash.
-  `FORTH_SIZE` = 0x1AC8 = **6,856 bytes** of dictionary budget (up to `LOGBUF`).
+  `FORTH_SIZE` = 0x1AC8 = **6,856 bytes** of dictionary budget, up to `DICT_TOP` (which is
+  `LOGBUF` now).
 - RAM, top down: `DSP_TOP` 0x20002000, `RSP_TOP` 0x20001F00, `TIB_TOP` 0x20001E00,
   `TIB_BOTTOM` 0x20001D00 (256 B), `var_STATE` 0x20001CFC, `var_TOIN` 0x20001CF8,
   `var_HERE` 0x20001CF4, `var_LATEST` 0x20001CF0, then log bookkeeping, `var_BASE`
   0x20001CD8, `var_HLD`, `var_CONTEXT`, `var_CURRENT`, `var_VOCLINK` 0x20001CC8, `PAD`
   0x20001BC8, `LOGBUF` 0x20001AC8. RAM-variable cells are named `var_X` as in jonesforth, so
   the bare names stay free for word labels; `TIB_BOTTOM` is the start of the input buffer.
-  New buffers (modem line, display frame, SD sectors) are carved out below `LOGBUF` the
-  same way, in `01-variables-constants.s`; each one shrinks `FORTH_SIZE`.
+  New buffers (modem line, display frame, SD sectors) are carved out below the lowest one
+  the same way, in `01-variables-constants.s`, and `DICT_TOP` moves down to the new one:
+  every dictionary bounds check and the error path's zero-fill stop at `DICT_TOP`. Each
+  buffer shrinks `FORTH_SIZE`.
 
 ## REPL quirks (they affect how tests and prelude files must be written)
 

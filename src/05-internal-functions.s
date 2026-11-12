@@ -205,7 +205,7 @@ make_header:
     addi a5, a5, 2*CELL         # ...+ link + count byte + alignment slack
     andi a5, a5, -CELL          # a5 = code field address
     addi gp, a5, CELL           # gp = new HERE
-    li tp, LOGBUF-CELL          # keep one spare cell: CREATE reserves it for DOES>
+    li tp, DICT_TOP-CELL        # keep one spare cell: CREATE reserves it for DOES>
     bge gp, tp, err_mem         # dictionary full
     li t1, var_CURRENT
     lw t1, 0(t1)                # head cell of the vocabulary definitions go to

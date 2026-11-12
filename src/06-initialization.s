@@ -121,15 +121,18 @@ ram_init:
     li t0, var_HERE     # load HERE memory address
     lw t0, 0(t0)        # load HERE value
     # CH32V006 PORT BUGFIX: `c,` and `allot` may leave HERE unaligned. The
-    # sw below would then trap (and the loop could never hit PAD exactly),
+    # sw below would then trap (and the loop could never hit the end exactly),
     # so any error typed after e.g. `3 allot` hung the board in the trap
     # handler. Start the fill at the next CELL boundary.
     addi t0, t0, CELL-1
     andi t0, t0, -CELL
-    li t1, PAD          # load PAD variable
+    # CH32V006 PORT: fill only the free dictionary, up to DICT_TOP (it was PAD:
+    # the buffers between are not the dictionary's). Stop at or above the end:
+    # with `beq`, a HERE above DICT_TOP would run the fill off the end of RAM.
+    li t1, DICT_TOP     # load the top of the dictionary
 ram_zerofill:
     # initialize the memory cells
-    beq t0, t1,ram_done # loop until counter (HERE) == PAD
+    bgeu t0, t1, ram_done # loop until counter (HERE) reaches DICT_TOP
     sw zero, 0(t0)      # zero-fill the memory address
     addi t0, t0, CELL   # increment counter by 1 CELL
     j ram_zerofill      # repeat

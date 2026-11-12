@@ -133,6 +133,19 @@ t("a stray ] and a typo leave the last word alone", ": keep 5 ; ] nosuchword\nke
 e, out, _ = h.session(B0, "] nosuchword\n: sq dup * ; 7 sq 16 + emit\n")
 check("... also when no RAM word exists yet", e, out, ["emit\nA"], absent=())
 
+# a definition that runs out of dictionary is dropped whole, wherever it runs
+# out: in its header, a number, a word, or at ; (zz takes 40 or 28 bytes)
+TOP = h.SYM["DICT_TOP"]
+for body, size in (("1 2 3", 40), ("dup dup dup", 28)):
+    for room in range(4, size + 8, 4):
+        e, out, _ = h.session(P, f"{TOP} here @ - {room} - allot : zz {body} ;\n"
+                                 f"here @ {TOP} > . 65 emit\nzz\n")
+        full, fits = "memory full" in out, room >= size
+        gone = out.rstrip().endswith("?")      # zz unknown: it was dropped
+        check(f"dictionary full, {room} bytes left for {size}: dropped whole", e,
+              out[-40:] + f" full={full != fits} gone={gone != fits}", ["0 A", "full=True", "gone=True"],
+              absent=())
+
 # ---- defining words ----
 t("variable", "variable x 7 x ! x @ .", "7 ")
 t("constant", "100 constant hundred hundred .", "100 ")
