@@ -54,6 +54,47 @@ class Emu:
         self.stk_ctlr = 0        # STK_CTLR
         self.stk_cnt0 = 0        # the count at cycle stk_at
         self.stk_at = 0
+        # The modem line: USART2 (reference manual 14.8) received by DMA1
+        # channel 7 (8.3). A test puts the modem's bytes in uart2_in; one
+        # arrives every uart2_period instructions (2083: one byte at 115200
+        # baud and 24 MHz), but only once USART2 is clocked (RCC), routed to
+        # PD2/PD3 (AFIO remap 011) and receiving (UE, RE) with DMAR, and
+        # channel 7 copies from its data register; until then bytes wait.
+        # They land at MADDR7 + (count - CNTR7), round again if CIRC. Bytes
+        # written to USART2_DATAR go to uart2_out, and back into uart2_in if
+        # uart2_loopback (a wire from PD2 to PD3) and PD2 is an alternate
+        # function output with TE on. TXE always reads 1. Receiving without
+        # DMA, USART2 interrupts and the other DMA modes are not modelled
+        # and fault; the other DMA channels are ignored as before.
+        self.uart2_in = []
+        self.uart2_out = []
+        self.uart2_loopback = False
+        self.uart2_period = 2083
+        self.uart2_next = 0
+        self.rcc = {0x40021014: 0x4, 0x40021018: 0}  # HBPCENR (SRAMEN at reset), PB2PCENR
+        self.afio_pcfr1 = 0
+        self.usart2 = {0x08: 0, 0x0C: 0, 0x14: 0}    # BRR, CTLR1, CTLR3
+        self.dma7 = {'cfgr': 0, 'cntr': 0, 'n': 0, 'paddr': 0, 'maddr': 0}
+
+    def uart2_listening(self):
+        pb2, c1 = self.rcc[0x40021018], self.usart2[0x0C]
+        return (pb2 & (1 << 13) and pb2 & 1 and (self.afio_pcfr1 >> 20) & 7 == 3
+                and c1 & (1 << 13))
+
+    def uart2_deliver(self):
+        # the next modem byte reaches PD3
+        self.uart2_next = self.cycles + self.uart2_period
+        if not (self.uart2_listening() and self.usart2[0x0C] & (1 << 2)):
+            return                                  # nobody listens on PD3 yet
+        d = self.dma7
+        if not (self.usart2[0x14] & 0x40 and self.rcc[0x40021014] & 1
+                and d['cfgr'] & 1 and d['paddr'] == 0x40004404 and d['cntr']):
+            self.fault = ("uart2-rx-without-dma", self.pc, 0x40004404); raise RuntimeError()
+        off = d['n'] - d['cntr'] if d['cfgr'] & 0x80 else 0     # MINC
+        self.w8(d['maddr'] + off, self.uart2_in.pop(0))
+        d['cntr'] -= 1
+        if d['cntr'] == 0 and d['cfgr'] & 0x20:                  # CIRC: reload
+            d['cntr'] = d['n']
 
     def stk_cnt(self):
         if not self.stk_ctlr & 1:                   # STE = 0: stopped
@@ -86,6 +127,8 @@ class Emu:
             return (self.uart_in.pop(0) & 0xFF) if self.uart_in else 0
         if a == 0x40011400:  # GPIOD_CFGLR
             return self.gpiod_cfglr
+        if a == 0x4001140C:  # GPIOD_OUTDR: the output latch (pull-up/down for inputs)
+            return self.gpiod_out
         if a == 0x40011408:  # GPIOD_INDR
             nib5 = (self.gpiod_cfglr >> 20) & 0xF         # CNF5:MODE5
             pd5_low = (nib5 & 3) and not (nib5 & 8) and not (self.gpiod_out >> 5) & 1
@@ -100,6 +143,18 @@ class Emu:
             return self.stk_cnt()
         if 0xE000F000 <= a < 0xE000F020:  # STK_SR, STK_CMPLR: not modelled
             self.fault = ("stk-unmodelled", self.pc, a); raise RuntimeError()
+        if a in self.rcc:    # RCC_HBPCENR, RCC_PB2PCENR
+            return self.rcc[a]
+        if a == 0x4001000C:  # AFIO_PCFR1
+            return self.afio_pcfr1
+        if a == 0x40004400:  # USART2_STATR: TXE and TC (receiving goes through DMA)
+            return 0xC0
+        if 0x40004400 <= a < 0x4000441C:  # USART2 BRR, CTLR1, CTLR3; DATAR etc. fault
+            if a - 0x40004400 not in self.usart2:
+                self.fault = ("uart2-unmodelled", self.pc, a); raise RuntimeError()
+            return self.usart2[a - 0x40004400]
+        if 0x40020080 <= a < 0x40020090:  # DMA channel 7: CFGR7 CNTR7 PADDR7 MADDR7
+            return self.dma7[('cfgr', 'cntr', 'paddr', 'maddr')[(a - 0x40020080) >> 2]]
         return self.r8(a) | self.r8(a+1)<<8 | self.r8(a+2)<<16 | self.r8(a+3)<<24
     def r16(self, a):
         if a & 1:
@@ -125,6 +180,37 @@ class Emu:
             self.stk_cnt0, self.stk_at = v & M32, self.cycles; return
         if 0xE000F000 <= a < 0xE000F020:  # STK_SR, STK_CMPLR: not modelled
             self.fault = ("stk-unmodelled", self.pc, a); raise RuntimeError()
+        if a in self.rcc:    # RCC_HBPCENR, RCC_PB2PCENR
+            self.rcc[a] = v & M32; return
+        if a == 0x4001000C:  # AFIO_PCFR1
+            self.afio_pcfr1 = v & M32; return
+        if a == 0x40004404:  # USART2_DATAR: send a byte to the modem
+            self.uart2_out.append(v & 0xFF)
+            pd2 = (self.gpiod_cfglr >> 8) & 0xF
+            if (self.uart2_loopback and self.uart2_listening()
+                    and self.usart2[0x0C] & (1 << 3) and pd2 & 0b1001 == 0b1001):
+                if not self.uart2_in:
+                    self.uart2_next = self.cycles + self.uart2_period
+                self.uart2_in.append(v & 0xFF)
+            return
+        if 0x40004400 <= a < 0x4000441C:  # USART2 BRR, CTLR1 (UE TE RE), CTLR3 (DMAR)
+            off, v = a - 0x40004400, v & M32
+            if (off not in self.usart2 or (off == 0x0C and v & ~0x200C)
+                    or (off == 0x14 and v & ~0x40)):
+                self.fault = ("uart2-unmodelled", self.pc, a); raise RuntimeError()
+            self.usart2[off] = v; return
+        if a == 0x40020080:  # DMA_CFGR7: EN, CIRC, MINC (and PL, no effect)
+            if v & ~0x30A1 & M32:
+                self.fault = ("dma-unmodelled", self.pc, a); raise RuntimeError()
+            self.dma7['cfgr'] = v & M32; return
+        if a == 0x40020084:  # DMA_CNTR7: written only while the channel is off
+            if self.dma7['cfgr'] & 1:
+                self.fault = ("dma-cntr-while-on", self.pc, a); raise RuntimeError()
+            self.dma7['cntr'] = self.dma7['n'] = v & 0xFFFF; return
+        if a == 0x40020088:  # DMA_PADDR7
+            self.dma7['paddr'] = v & M32; return
+        if a == 0x4002008C:  # DMA_MADDR7
+            self.dma7['maddr'] = v & M32; return
         if a == 0x40022004:  # FLASH_KEYR: KEY1 then KEY2 unlocks programming
             if v == 0x45670123 and self.fpec['kstage'] == 0:
                 self.fpec['kstage'] = 1
@@ -221,6 +307,8 @@ class Emu:
     def step(self):
         pc = self.pc
         self.cycles += 1         # SysTick model: one HCLK cycle per instruction
+        if self.uart2_in and self.cycles >= self.uart2_next:
+            self.uart2_deliver()     # the next modem byte arrives
         lo = self.r16(pc)
         self.trace.append(pc); self.trace = self.trace[-64:]
         if (lo & 3) != 3:

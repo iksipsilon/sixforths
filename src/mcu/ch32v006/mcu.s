@@ -89,6 +89,43 @@
 .equ STK_CTLR_STRE, (1 << 3)    # 1: restart from 0 at the compare value, 0: keep counting up
 .equ STK_TICKS_PER_MS, CPU_FREQ / 8 / 1000   # HCLK/8 = 3 MHz: 3000 ticks per ms
 
+##
+# Modem UART - CH32V006 PORT, for 14-modem.s: USART2 on PD2 (TX) / PD3 (RX),
+# its receiver emptied by DMA1 channel 7. Reference manual V1.5 sections given.
+##
+.equ RCC_BASE, 0x40021000
+.equ RCC_HBPCENR, 0x14          # 3.4.6 HB peripheral clock enable register
+.equ RCC_PB2PCENR, 0x18         # 3.4.7 PB2 peripheral clock enable register
+.equ RCC_DMA1EN, (1 << 0)       # HBPCENR bit 0
+.equ RCC_AFIOEN, (1 << 0)       # PB2PCENR bit 0
+.equ RCC_USART2EN, (1 << 13)    # PB2PCENR bit 13 (USART2 hangs off PB2 here, next to USART1)
+.equ AFIO_PCFR1, 0x4001000C     # 7.3.2.2 remap register 1
+.equ AFIO_USART2_RM, (7 << 20)  # USART2_RM[22:20]
+.equ AFIO_USART2_PD2_PD3, (3 << 20)  # 011: TX on PD2, RX on PD3 (Table 7-11), the only
+                                # USART2 remap the QFN20 can use
+.equ GPIOD_BSHR, 0x10           # 7.3.1.4 bit set/reset register (low half sets)
+.equ USART2_BASE, 0x40004400    # Table 14-3
+.equ USART_STATR, 0x00          # 14.8.1 status register
+.equ USART_DATAR, 0x04          # 14.8.2 data register
+.equ USART_BRR, 0x08            # 14.8.3 baud rate register (USARTDIV in 1/16ths)
+.equ USART_CTLR1, 0x0C          # 14.8.4 control register 1
+.equ USART_CTLR3, 0x14          # 14.8.6 control register 3
+.equ USART_STATR_TXE, (1 << 7)  # the data register can take the next byte
+.equ USART_CTLR1_UE, (1 << 13)  # USART on
+.equ USART_CTLR1_TE, (1 << 3)   # transmitter on
+.equ USART_CTLR1_RE, (1 << 2)   # receiver on
+.equ USART_CTLR3_DMAR, (1 << 6) # received bytes go to the DMA
+.equ MODEM_BAUD, 115200
+.equ DMA1_BASE, 0x40020000      # Table 8-3; USART2_RX is channel 7 (Table 8-2)
+.equ DMA_CFGR7, 0x80            # 8.3.3 channel 7 configuration (0x08 + (7-1)*20)
+.equ DMA_CNTR7, 0x84            # 8.3.4 channel 7 transfers left, NDT[15:0]
+.equ DMA_PADDR7, 0x88           # 8.3.5 channel 7 peripheral address
+.equ DMA_MADDR7, 0x8C           # 8.3.6 channel 7 memory address
+.equ DMA_CFGR_EN, (1 << 0)      # channel on
+.equ DMA_CFGR_CIRC, (1 << 5)    # circular: CNTR reloads at 0
+.equ DMA_CFGR_MINC, (1 << 7)    # memory address steps on; DIR = 0 (peripheral to memory),
+                                # PSIZE = MSIZE = 00 (8 bits), PL = 00 (low)
+
 .balign CELL
 # Initialize the UART
 uart_init:

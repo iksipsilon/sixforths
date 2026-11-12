@@ -28,6 +28,8 @@ boot_arm:
     li t0, LOGSRC
     sw t2, 0(t0)
 
+    call modem_init     # CH32V006 PORT: USART2 + DMA ring for mkey and memit (14-modem.s)
+
     # initialize HERE variable
     li t0, RAM_BASE     # load RAM_BASE memory address
     li t1, var_HERE     # load HERE variable
@@ -126,9 +128,11 @@ ram_init:
     # handler. Start the fill at the next CELL boundary.
     addi t0, t0, CELL-1
     andi t0, t0, -CELL
-    # CH32V006 PORT: fill only the free dictionary, up to DICT_TOP (it was PAD:
-    # the buffers between are not the dictionary's). Stop at or above the end:
-    # with `beq`, a HERE above DICT_TOP would run the fill off the end of RAM.
+    # CH32V006 PORT: fill only the free dictionary, up to DICT_TOP (it was PAD).
+    # The buffers above it must survive an error: the DMA keeps writing modem
+    # bytes into MRING, and those not yet read would be lost. Stop at or above
+    # the end: with `beq`, a HERE above DICT_TOP would run the fill off the end
+    # of RAM.
     li t1, DICT_TOP     # load the top of the dictionary
 ram_zerofill:
     # initialize the memory cells

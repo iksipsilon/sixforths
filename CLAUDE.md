@@ -99,7 +99,7 @@ hardware.
 
 - Flash 0x00000000: kernel + `.rodata`, **must stay under 16 KiB** (`FLASH` `LENGTH` in
   `src/board/ch32v006f8u6/linker.ld`; confirm it says 16k).
-  Currently 12,432 bytes (173 words). Report the size after every change.
+  Currently 13,044 bytes (177 words). Report the size after every change.
 - Flash 0x08004000-0x08006800: source-replay log (10 KiB).
 - Flash 0x08006800-0x0800F800 (`USER_FLASH`..`FLASH_TOP`, 36 KiB): the application's own
   data, written a 256-byte page at a time with `fpage-erase ( page -- )` and
@@ -108,13 +108,14 @@ hardware.
   see `etc/answers.md`). The phonebook and the SMS stay on the SIM.
 - RAM 0x20000000: the user dictionary grows up from here (`HERE`). It is **empty after
   boot**: every kernel word lives in flash.
-  `FORTH_SIZE` = 0x1AC8 = **6,856 bytes** of dictionary budget, up to `DICT_TOP` (which is
-  `LOGBUF` now).
+  `FORTH_SIZE` = 0x19C0 = **6,592 bytes** of dictionary budget, up to `DICT_TOP` (which is
+  `MRING` now).
 - RAM, top down: `DSP_TOP` 0x20002000, `RSP_TOP` 0x20001F00, `TIB_TOP` 0x20001E00,
   `TIB_BOTTOM` 0x20001D00 (256 B), `var_STATE` 0x20001CFC, `var_TOIN` 0x20001CF8,
   `var_HERE` 0x20001CF4, `var_LATEST` 0x20001CF0, then log bookkeeping, `var_BASE`
-  0x20001CD8, `var_HLD`, `var_CONTEXT`, `var_CURRENT`, `var_VOCLINK` 0x20001CC8, `PAD`
-  0x20001BC8, `LOGBUF` 0x20001AC8. RAM-variable cells are named `var_X` as in jonesforth, so
+  0x20001CD8, `var_HLD`, `var_CONTEXT`, `var_CURRENT`, `var_VOCLINK` 0x20001CC8, `var_MRD`,
+  `var_MTIMEOUT` 0x20001CC0, `PAD` 0x20001BC0, `LOGBUF` 0x20001AC0, `MRING` 0x200019C0 (the
+  modem's 256-byte receive ring) = `DICT_TOP`. RAM-variable cells are named `var_X` as in jonesforth, so
   the bare names stay free for word labels; `TIB_BOTTOM` is the start of the input buffer.
   New buffers (modem line, display frame, SD sectors) are carved out below the lowest one
   the same way, in `01-variables-constants.s`, and `DICT_TOP` moves down to the new one:
@@ -177,7 +178,7 @@ defines lives in RAM, so a reset loses it unless `+log` was on.
 
 Layout:
 - `sixforths.s` (repo root) is the top-level file. It includes `board.s`, `mcu.s`, then
-  `src/01-*.s` ... `src/13-ticks.s` **in that order**. The dictionary follows the
+  `src/01-*.s` ... `src/14-modem.s` **in that order**. The dictionary follows the
   include order, and `.equ last_word, link` after the last include marks its end. It is
   searched from the end, so words in later files are found first.
 - `src/board/ch32v006f8u6/` holds `board.s` and `linker.ld`; `src/mcu/ch32v006/` holds
@@ -197,6 +198,8 @@ Layout:
   safer as threads.
 - `src/12-flash-log.s` holds the source log and the user flash page words.
 - `src/13-ticks.s` holds `ticks` and `ms` (SysTick, polled).
+- `src/14-modem.s` holds the modem UART: USART2 received by DMA into `MRING`, and the
+  words `mkey?` `mkey` `memit` `mtimeout`.
 - `emulators/` holds `rv32emu.py` (the owner's RV32EC emulator: alignment, RV32E register
   use, FPEC sequencing and illegal instructions all fault), `harness.py` (boots
   `../sixforths.bin` in it), `test_fotrh.py` (the tests; it loads `../prelude.f`) and
@@ -261,8 +264,10 @@ Work this list from the top, **one item per session**, and stop after each for t
 to test on the board. The reasons behind each choice are in `etc/answers.md`.
 
 Rules for all of it:
-- The emulator has no USART2, DMA, TIMx or interrupt model (its SysTick counts one HCLK
-  cycle per instruction and faults on STIE, STRE, SR and CMPLR). Before writing a driver, add
+- The emulator models SysTick (one HCLK cycle per instruction), USART2 and DMA channel 7
+  (a test puts the modem's bytes in `uart2_in`; `uart2_loopback` is a PD2-PD3 wire), and
+  faults on the parts of them it does not model. It has no TIMx and no interrupt model.
+  Before writing a driver, add
   the smallest model of that device to `emulators/rv32emu.py` so the words can be tested
   there, and say plainly which part can only be checked on the board.
 - Look every register address and bit up in `docs/ch32v006/CH32V00XRM.PDF` (only the pages
@@ -276,6 +281,17 @@ Rules for all of it:
   needs it extended to its number. HPE and the vector mode are set in CSRs described in
   `docs/ch32v006/QingKeV2_Processor_Manual.PDF` chapter 3.
 - Everything that waits (for the modem, for a key) needs a timeout. A phone must not hang.
+
+Pins in use (QFN20 pin numbers from the datasheet's V006F8U7 column):
+
+| Pin | QFN | Use |
+|---|---|---|
+| PD1 | 15 | SWIO, the debug pin minichlink uses |
+| PD2 | 16 | USART2 TX, to the modem's RX |
+| PD3 | 17 | USART2 RX, from the modem's TX (pull-up); keep WeAct solder bridge SB2 (PD3 to USB D+) open |
+| PD4 | 18 | replay-skip button (high at reset); joined to PD5 by SB3/SB4 on the WeAct board |
+| PD5 | 19 | USART1 TX, the console |
+| PD6 | 20 | USART1 RX, the console |
 
 The steps:
 1. **First flash of this kernel.** Ask first (rule 3 above). The log on the board still
@@ -310,6 +326,12 @@ The steps:
    USART2 can only be TX = PD2, RX = PD3 on the QFN20 (`AFIO_PCFR1` USART2_RM = 011; the
    other remaps need pins it lacks, or SWIO); its clock is `RCC_PB2PCENR` bit 13, its RX
    is DMA channel 7 (RM Table 8-2).
+   **Driver done in the emulator 2026-11-12, not yet on the board:** `mkey? ( -- flag )`,
+   `mkey ( -- c | -1 )` (waits at most `mtimeout` ms, 1000 at boot; -1 if nothing came),
+   `memit ( c -- )`, `mtimeout ( -- addr )`. A 256-byte ring; a reader that falls a whole
+   ring behind loses bytes without an error. Board test: a wire from PD2 to PD3, then
+   `65 memit mkey .` must print 65. Found on the way: the interpreter compiled into a
+   definition with no bounds check, and `;` unhid before its check (fixed, `b13ad53`).
 4. **Vectored `emit` and `key`.** One RAM cell holds the routine `emit`, `type`, `."` and
    `.` send through (console, modem or display), another the one `key` and `key?` read from
    (console, `mkey`, or the keypad's characters from step 6). `mkey?` `mkey` `memit` stay as

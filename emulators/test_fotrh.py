@@ -294,13 +294,13 @@ e = copy.deepcopy(B0)
 h.feed(e, "+log\n")
 errs = 0
 for k in range(180):
-    out, _ = h.feed(e, f": w{k} {k} 3 * ;\n")
+    out, _ = h.feed(e, f": w{k} {k} ;\n")
     errs += "  ?" in out
 n = len(logbytes(e))
 r = h.boot(flash=bytes(e.f))
 out, _ = h.feed(r, "w0 w179 + .\n")
 check(f"log: 180 definitions logged ({n} bytes) and replayed", r,
-      out + f" errs={errs}" + (" [many pages]" if n > 8 * 256 else ""), ["537 ", "errs=0", "[many pages]"])
+      out + f" errs={errs}" + (" [many pages]" if n > 8 * 256 else ""), ["179 ", "errs=0", "[many pages]"])
 h.feed(e, "wipe\n")
 erased = bytes(e.f[LOG0:LOG0 + LOGN]) == b"\xff" * LOGN
 check("log: wipe erases the region", e, "[erased]" if erased else "[NOT erased]", ["[erased]"])
@@ -387,12 +387,46 @@ t("ms across the wrap", "0xFFFFF000 0xE000F008 ! ticks 2 ms ticks over 0xF000000
   "-1 -1 0 -1 ")
 t("ms on an empty stack", "ms", "? stack underflow", absent=())
 
+# ---- modem: USART2 + DMA channel 7 into the ring (the emulator delivers a byte per 2083 instructions) ----
+def tm(name, src, *expect, modem=b"", loop=False, absent=("  ?",)):
+    """modem: bytes the modem sends; loop: a wire from PD2 (TX) to PD3 (RX)."""
+    e = copy.deepcopy(P)
+    e.uart2_in, e.uart2_loopback = list(modem), loop
+    out, steps = h.feed(e, src + "\n")
+    check(name, e, out, list(expect), absent)
+    return e, out
+
+tm("USART2 115200 8N1 with DMAR, channel 7 circular into the ring",
+   "0x40004408 @ . 0x4000440C @ . 0x40004414 @ . 0x40020080 @ . 0x40020084 @ . 0x4002008C @ .",
+   f"208 8204 64 161 256 {h.SYM['MRING']} ")
+tm("clocks, PD2/PD3 remap and pins", "0x40021014 @ 1 and . 0x40021018 @ 8193 and . 0x4001000C @ 20 rshift 7 and . "
+   "0x40011400 @ 8 rshift 255 and . 0x4001140C @ 8 and .", "1 8193 3 137 8 ")
+tm("mtimeout is 1000 at boot", "mtimeout @ .", "1000 ")
+tm("mkey? with nothing from the modem", "mkey? .", "0 ")
+tm("mkey? sees a byte, mkey takes it", "1 ms mkey? . mkey emit mkey? .", "-1 A0 ", modem=b"A")
+tm("mkey reads what the modem sent", "mkey emit mkey emit mkey . mkey .", "OK13 10 ", modem=b"OK\r\n")
+tm("mkey gives -1 after mtimeout ms", "10 mtimeout ! ticks mkey . ticks swap - dup 30000 < . 33000 < .", "-1 0 -1 ")
+tm("0 mtimeout: mkey does not wait", "0 mtimeout ! ticks mkey . ticks swap - 3000 < .", "-1 -1 ")
+tm("negative mtimeout: mkey does not wait", "-5 mtimeout ! ticks mkey . ticks swap - 3000 < .", "-1 -1 ")
+e, out = tm("memit sends to the modem", "65 memit 66 memit 0x1143 memit")
+check("memit sends the low byte", e, repr(bytes(e.uart2_out)), ["b'ABC'"])
+tm("memit on an empty stack", "memit", "? stack underflow", absent=())
+tm("loopback: memit comes back through mkey", "65 memit mkey .", "mkey .\n65 ", loop=True)
+tm("300 bytes through the 256-byte ring, read as they come",
+   ": lb 0 300 0 do i 255 and dup memit mkey <> if 1+ then loop ; lb .", "lb .\n0 ", loop=True)
+tm("300 unread bytes: the ring keeps only the last 44",
+   ": drain 0 begin mkey? while mkey drop 1+ repeat ; 30 ms mkey emit drain .", "B43 ",
+   modem=b"a" * 256 + b"B" * 44)
+tm("an error keeps the unread modem bytes", "1 ms nosuchword\nmkey emit mkey emit", "  ?", "XY", modem=b"XY",
+   absent=())
+tm("after reboot the modem works again", "reboot\n65 memit mkey .", "mkey .\n65 ", loop=True)
+
 # ---- words ----
 e, out, _ = h.session(P, "words\n")
 names = out.split("\n")[1].split()                # line 0 is the echoed input
 print("word count:", len(names))
 check("words lists new primitives", e, out, ["um/mod", "xdoes", "find-name", "parse", "um*", "quit"])
-check("words lists ms and ticks first", e, out, ["\n ms ticks wipe "])
+check("words lists the modem words, then ms and ticks", e, out, ["\n mtimeout memit mkey mkey? ms ticks wipe "])
 
 print("\nALL PASS" if failures == 0 else f"\n{failures} FAILURES")
 sys.exit(1 if failures else 0)

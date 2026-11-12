@@ -43,17 +43,25 @@
 .equ var_CONTEXT, var_HLD - CELL        # 1 CELL: head cell of the vocabulary searched first
 .equ var_CURRENT, var_CONTEXT - CELL    # 1 CELL: head cell of the vocabulary definitions go to
 .equ var_VOCLINK, var_CURRENT - CELL    # 1 CELL: newest vocabulary (its link cell), 0 = none
-.equ PAD, var_VOCLINK - (CELL * 64)     # 64 CELLS between var_VOCLINK and PAD
+# CH32V006 PORT: modem receive (14-modem.s)
+.equ var_MRD, var_VOCLINK - CELL        # 1 CELL: offset in MRING of the next byte mkey reads
+.equ var_MTIMEOUT, var_MRD - CELL       # 1 CELL: how many ms mkey waits for a byte (see mtimeout)
+.equ PAD, var_MTIMEOUT - (CELL * 64)    # 64 CELLS between var_MTIMEOUT and PAD
 # CH32V006 PORT: pending batch buffer for the log. Lines of a multi-line
 # definition are held here and committed to flash only when a line ends with
 # STATE = 0, so a definition reaches the log whole or not at all.
 .equ LOGBUF_SIZE, 256
 .equ LOGBUF, PAD - LOGBUF_SIZE
+# CH32V006 PORT: modem receive ring. DMA1 channel 7 writes every byte USART2
+# receives into it, round and round (14-modem.s). A power of two, so an
+# offset wraps with one AND.
+.equ MRING_SIZE, 256
+.equ MRING, LOGBUF - MRING_SIZE
 
 # CH32V006 PORT: the top of the user dictionary is the lowest buffer. Every
 # dictionary bounds check and the error path's zero-fill stop at DICT_TOP, so
 # a new buffer is carved out below the lowest one and DICT_TOP moves to it.
-.equ DICT_TOP, LOGBUF
+.equ DICT_TOP, MRING
 
 # dictionary grows upward from the RAM base address
 .equ FORTH_SIZE, DICT_TOP - RAM_BASE    # remaining memory for Forth
