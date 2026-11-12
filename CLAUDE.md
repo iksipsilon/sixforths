@@ -300,6 +300,13 @@ The steps:
    before any more code: does the DMA keep storing bytes while a flash page is erased
    (the core stands still for about 3 ms)? If it does not, the call log must not be
    written while the modem may talk. Consider a lower modem baud rate (`AT+IPR`).
+   **Experiment done 2026-11-12: it does.** USART1 RX through DMA channel 5 (the same
+   controller as USART2's channel 7) received 2,048 streamed bytes while 16 pages were
+   erased: 543 of them during the 46.8 ms of erasing (2.92 ms a page), no overrun, none
+   wrong. SysTick kept counting through the stall. Page programming (FTPG) was not tried.
+   USART2 can only be TX = PD2, RX = PD3 on the QFN20 (`AFIO_PCFR1` USART2_RM = 011; the
+   other remaps need pins it lacks, or SWIO); its clock is `RCC_PB2PCENR` bit 13, its RX
+   is DMA channel 7 (RM Table 8-2).
 4. **Vectored `emit`.** One RAM cell holds the routine `emit`, `type`, `."` and `.` send
    through: console, modem or display. Error messages and the trap beacon always use the
    console, and `reset` selects the console again.

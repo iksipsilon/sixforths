@@ -224,9 +224,11 @@ One of each and no more:
 
 ## 9. Not checked by anyone yet
 
-- The whole branch on the real chip.
-- Whether the DMA keeps storing bytes while a flash page is erased. If not, the call log
-  must not be written while the modem may talk.
+- The whole branch on the real chip: phase 2 steps 1 and 2 passed there on 2026-11-12
+  (`CLAUDE.md`); `fpage-prog` and the log-full path have not run there yet.
+- ~~Whether the DMA keeps storing bytes while a flash page is erased.~~ It does (checked
+  2026-11-12 with USART1 and DMA channel 5, see phase 2 step 3 in `CLAUDE.md`), so the
+  call log may be written while the modem talks. Page programming was not tried.
 - Whether the A7670E has the "DC" / "MC" / "RC" lists (`AT+CPBS=?` shows it). The plan
   does not depend on them.
 - The 74HC165 wiring idea in section 5.
