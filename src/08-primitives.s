@@ -625,17 +625,6 @@ defcode "cell+",5,,CELLPLUS
     sw t1, 0(sp)
     NEXT
 
-# um+ ( u u -- sum carry ) Unsigned add with carry (eForth's arithmetic seed)
-defcode "um+",3,,UMPLUS
-    checkunderflow CELL # need 2 items
-    lw t1, CELL(sp)     # first operand
-    lw t2, 0(sp)        # second operand
-    add a4, t1, t2      # 32-bit sum (wraps)
-    sltu a5, a4, t1     # carry: unsigned sum < operand means it wrapped
-    sw a4, CELL(sp)     # replace both cells in place
-    sw a5, 0(sp)
-    NEXT
-
 # um* ( u1 u2 -- lo hi )   Unsigned 32x32 -> 64 multiply, hi on top.
 # Built from four 16x16 `mul`s so it needs nothing beyond the base Zmmul `mul`
 # (no mulhu): result = p00 + (p01+p10)<<16 + p11<<32, with the carries of the
@@ -753,16 +742,6 @@ defcode "invert",6,,INVERT
     lw t1, 0(sp)
     xori t1, t1, -1
     sw t1, 0(sp)
-    NEXT
-
-# nand ( x1 x2 -- n )   Bitwise NAND the two values at the top of the stack
-defcode "nand",4,,NAND
-    checkunderflow CELL # check for stack underflow of data stack (2 CELLs)
-    POP t0              # pop DSP value (x1) into temporary
-    lw t1, 0(sp)        # load DSP value (x2) into temporary
-    and t0, t0, t1      # perform bitwise AND of the two values
-    not t0, t0          # perform bitwise NOT of the value
-    sw t0, 0(sp)        # store the value into the top of the stack
     NEXT
 
 ##
