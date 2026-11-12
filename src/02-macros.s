@@ -3,11 +3,15 @@
 ##
 
 # jump to the next subroutine (ITC), appended to each primitive
+# CH32V006 PORT: the temporary is a5, not t0. The 2-byte forms of lw/sw
+# through a pointer only take s0, s1 and a0-a5, so with IP = s1, W = a0 and
+# a5 all four instructions are compressed: 8 bytes instead of 10 for every
+# NEXT. Nothing is live in a5 when a word ends.
 .macro NEXT
     lw a0, 0(s1)        # load memory address from IP into W
     addi s1, s1, CELL   # increment IP by CELL size
-    lw t0, 0(a0)        # load address from W into temporary
-    jr t0               # jump to the address in temporary
+    lw a5, 0(a0)        # load address from W into temporary
+    jr a5               # jump to the address in temporary
 .endm
 
 # pop top of data stack to register and move DSP

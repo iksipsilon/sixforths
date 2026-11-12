@@ -193,8 +193,10 @@ colon_pad:
     addi a4, a4, 1      # advance the pad pointer
     j colon_pad
 colon_code:
-    # code field: points at the machine code that jumps to docol
-    la a2, .addr        # load the codeword address into Y working register
+    # code field: docol, the same value a defword header holds
+    # (CH32V006 PORT: upstream pointed it at a `j docol` stub, one extra
+    # jump for every call of a colon word)
+    la a2, docol        # load the codeword address into Y working register
     sw a2, 0(a5)        # store the codeword address into the code field
 
     # update LATEST variable
@@ -215,9 +217,6 @@ docol:
     PUSHRSP s1          # push IP onto the return stack
     addi s1, a0, CELL   # skip code field in W by adding 1 CELL, store it in IP
     NEXT
-
-.addr:
-    j docol             # indirect jump to interpreter after executing a word
 
 # ; ( -- )              # End the definition of a new word
 defcode ";",1,F_IMMEDIATE,SEMI

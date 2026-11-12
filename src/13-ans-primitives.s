@@ -732,7 +732,7 @@ defcode "docon",5,,DOCONW
 
 # docol ( -- code )     The code-field value of a colon definition
 defcode "docol",5,,DOCOLW
-    la t1, .addr
+    la t1, docol
     PUSH t1
     NEXT
 
