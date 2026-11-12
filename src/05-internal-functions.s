@@ -162,3 +162,49 @@ lookup_error:
 lookup_done:
     mv a1, a2                   # return the word header address in X
     ret
+
+.balign CELL
+# make_header: build a dictionary header at HERE
+# arguments: a0 = name address, a1 = name length (1..31), a2 = code field
+#            value, a3 = initial flags (0, or F_HIDDEN)
+# leaves HERE just after the code field and LATEST pointing at the new word.
+# Same layout and bounds check as ':' in 08-forth-primitives.s.
+# HERE is rounded up to a CELL boundary first, so a header can follow `c,`.
+# clobbers: t0, t1, t2, a0, a4, a5, gp, tp
+make_header:
+    li t0, var_HERE
+    lw t2, 0(t0)
+    addi t2, t2, CELL-1         # HERE may be unaligned after `c,` or `allot`
+    andi t2, t2, -CELL          # t2 = address of the new header (aligned)
+    add a5, t2, a1              # header + name length...
+    addi a5, a5, 2*CELL         # ...+ link + count byte + alignment slack
+    andi a5, a5, -CELL          # a5 = code field address
+    addi gp, a5, CELL           # gp = new HERE
+    li tp, LOGBUF-CELL          # keep one spare cell: CREATE reserves it for DOES>
+    bge gp, tp, err_mem         # dictionary full
+    li t1, var_LATEST
+    lw a4, 0(t1)
+    sw a4, 0(t2)                # link field = previous LATEST
+    or a4, a1, a3               # flags + length byte
+    sb a4, CELL(t2)
+    addi a4, t2, CELL+1         # a4 = name destination
+    mv t1, a1                   # t1 = byte counter
+mkh_copy:
+    lbu t0, 0(a0)
+    sb t0, 0(a4)
+    addi a0, a0, 1
+    addi a4, a4, 1
+    addi t1, t1, -1
+    bnez t1, mkh_copy
+mkh_pad:
+    beq a4, a5, mkh_code        # zero the padding: headers must be deterministic
+    sb zero, 0(a4)
+    addi a4, a4, 1
+    j mkh_pad
+mkh_code:
+    sw a2, 0(a5)                # code field
+    li t1, var_LATEST
+    sw t2, 0(t1)                # LATEST = the new word
+    li t0, var_HERE
+    sw gp, 0(t0)                # HERE = just after the code field
+    ret
