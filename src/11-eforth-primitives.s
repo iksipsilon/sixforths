@@ -205,12 +205,16 @@ zbranch_skip:
     addi s1, s1, CELL   # skip over the target cell
     NEXT
 
-# , ( x -- )            Append a cell to the dictionary at HERE
+# , ( x -- )            Append a cell to the dictionary at HERE. An unaligned
+# HERE (after `c,` or an odd `allot`) is rounded up first: the store would
+# trap otherwise.
 defcode ",",1,,COMMA
     checkunderflow 0    # need 1 item
     POP t1
     li t2, var_HERE
     lw a4, 0(t2)        # current HERE value
+    addi a4, a4, CELL-1 # round it up to a CELL boundary
+    andi a4, a4, -CELL
     li a5, LOGBUF       # dictionary bounds check, like COLON's
     bge a4, a5, err_mem
     sw t1, 0(a4)        # store the cell

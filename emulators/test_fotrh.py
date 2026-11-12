@@ -94,6 +94,11 @@ t("move overlap (dst>src)", "65 pad c! 66 pad 1+ c! 67 pad 2 + c! pad pad 1+ 3 m
 t("move overlap (dst<src)", "65 pad 1+ c! 66 pad 2 + c! 67 pad 3 + c! pad 1+ pad 3 move pad c@ . pad 2 + c@ .", "65 67 ")
 t("align allot c,", "here @ 3 allot align here @ swap - . here @ 65 c, 66 c, dup c@ . 1+ c@ .", "4 65 66 ")
 
+t("error with HERE unaligned", "3 allot nosuchword\n65 emit", "  ?", "65 emit\nA", absent=())
+t(": after an odd allot", "1 allot : aa 7 ; aa .", "7 ")
+t("create after c,", "65 c, create zz 9 , zz @ .", "9 ")
+t(", after c,", "65 c, here @ 3 + -4 and 77 , @ .", "77 ")
+
 # ---- control flow ----
 t("begin until", ": c5 5 begin dup . 1- dup 0= until drop ; c5", "5 4 3 2 1 ")
 t("while repeat", ": w3 0 begin dup 3 < while dup . 1+ repeat drop ; w3", "0 1 2 ")

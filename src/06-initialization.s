@@ -95,6 +95,12 @@ reset_replay_done:
 ram_init:
     li t0, var_HERE     # load HERE memory address
     lw t0, 0(t0)        # load HERE value
+    # CH32V006 PORT BUGFIX: `c,` and `allot` may leave HERE unaligned. The
+    # sw below would then trap (and the loop could never hit PAD exactly),
+    # so any error typed after e.g. `3 allot` hung the board in the trap
+    # handler. Start the fill at the next CELL boundary.
+    addi t0, t0, CELL-1
+    andi t0, t0, -CELL
     li t1, PAD          # load PAD variable
 ram_zerofill:
     # initialize the memory cells

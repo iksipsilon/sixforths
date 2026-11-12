@@ -151,7 +151,9 @@ defcode ":",1,,COLON
     # link cell, flags+length byte (HIDDEN while compiling), the name itself,
     # zero padding to the next CELL boundary, then the code field.
     li t0, var_HERE
-    lw t2, 0(t0)        # t2 = HERE value = address of the new word header
+    lw t2, 0(t0)        # t2 = HERE value...
+    addi t2, t2, CELL-1 # ...rounded up to a CELL boundary (after `c,` or an
+    andi t2, t2, -CELL  # odd `allot`) = address of the new word header
 
     # compute the code field address and the new HERE; bounds check first
     add a5, t2, a1      # header + name length...

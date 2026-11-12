@@ -27,10 +27,13 @@
 #            value, a3 = initial flags (0, or F_HIDDEN)
 # leaves HERE just after the code field and LATEST pointing at the new word.
 # Same layout and bounds check as ':' in 08-forth-primitives.s.
+# HERE is rounded up to a CELL boundary first, so a header can follow `c,`.
 # clobbers: t0, t1, t2, a0, a4, a5, gp, tp
 make_header:
     li t0, var_HERE
-    lw t2, 0(t0)                # t2 = address of the new header
+    lw t2, 0(t0)
+    addi t2, t2, CELL-1         # HERE may be unaligned after `c,` or `allot`
+    andi t2, t2, -CELL          # t2 = address of the new header (aligned)
     add a5, t2, a1              # header + name length...
     addi a5, a5, 2*CELL         # ...+ link + count byte + alignment slack
     andi a5, a5, -CELL          # a5 = code field address
@@ -473,7 +476,9 @@ defcode "pad",3,,PADADDR
     NEXT
 
 # allot ( n -- )        Reserve n bytes at HERE. Bounds-checked like `,`.
-# Follow with  align  if n is not a multiple of 4: `,` traps on a misaligned HERE.
+# HERE may end up unaligned: `,`, `:` and `create` round it up themselves, but
+# a cell laid down by the compiler inside a definition does not, so write
+# align  after `[ n allot ]` in a colon definition.
 defcode "allot",5,,ALLOT
     checkunderflow 0
     POP t1
