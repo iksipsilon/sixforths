@@ -99,7 +99,7 @@ hardware.
 
 - Flash 0x00000000: kernel + `.rodata`, **must stay under 16 KiB** (`FLASH` `LENGTH` in
   `src/board/ch32v006f8u6/linker.ld`; confirm it says 16k).
-  Currently 13,044 bytes (177 words). Report the size after every change.
+  Currently 13,072 bytes (177 words). Report the size after every change.
 - Flash 0x08004000-0x08006800: source-replay log (10 KiB).
 - Flash 0x08006800-0x0800F800 (`USER_FLASH`..`FLASH_TOP`, 36 KiB): the application's own
   data, written a 256-byte page at a time with `fpage-erase ( page -- )` and
@@ -282,13 +282,14 @@ Rules for all of it:
   `docs/ch32v006/QingKeV2_Processor_Manual.PDF` chapter 3.
 - Everything that waits (for the modem, for a key) needs a timeout. A phone must not hang.
 
-Pins in use (QFN20 pin numbers from the datasheet's V006F8U7 column):
+Pins in use (QFN20 pin numbers from the datasheet's V006F8U7 column; the board's header
+labels them D1 ... D6; its schematic is `docs/ch32v006/CH32V00xFxUx_Pinout.pdf`):
 
 | Pin | QFN | Use |
 |---|---|---|
 | PD1 | 15 | SWIO, the debug pin minichlink uses |
 | PD2 | 16 | USART2 TX, to the modem's RX |
-| PD3 | 17 | USART2 RX, from the modem's TX (pull-up); keep WeAct solder bridge SB2 (PD3 to USB D+) open |
+| PD3 | 17 | USART2 RX, from the modem's TX (pull-up). WeAct solder bridge SB2 joins it to the USB-C D+ line (33 Ω): keep the board's USB-C socket unplugged |
 | PD4 | 18 | replay-skip button (high at reset); joined to PD5 by SB3/SB4 on the WeAct board |
 | PD5 | 19 | USART1 TX, the console |
 | PD6 | 20 | USART1 RX, the console |

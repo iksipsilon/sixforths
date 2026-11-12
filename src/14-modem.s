@@ -56,6 +56,18 @@ modem_init:
     li t1, 1000
     sw t1, 0(t0)                # mkey waits up to 1 s for a byte
 
+    # RX pin before the receiver: a floating PD3 (its reset state) could look
+    # like a start bit and put a junk byte in the ring
+    li t0, GPIOD_BASE
+    li t1, (1 << 3)
+    sw t1, GPIOD_BSHR(t0)       # PD3 output latch = 1: pull-up, not pull-down (7.3.1.3)
+    lw t1, 0x00(t0)             # GPIOD_CFGLR (7.3.1.1): per pin CNF[1:0], reserved, MODE
+    li t2, ~(0xf << (4*3))
+    and t1, t1, t2
+    li t2, (0b1000 << (4*3))
+    or t1, t1, t2
+    sw t1, 0x00(t0)             # PD3: CNF = 10 input with pull-up, MODE = 0 input
+
     li t0, USART2_BASE
     li t1, (CPU_FREQ / MODEM_BAUD)
     sw t1, USART_BRR(t0)        # 24 MHz / 115200 = 208 (as for USART1 in uart_init)
@@ -64,16 +76,14 @@ modem_init:
     li t1, USART_CTLR1_UE | USART_CTLR1_TE | USART_CTLR1_RE
     sw t1, USART_CTLR1(t0)      # on; CTLR2 keeps its reset value (1 stop bit)
 
-    # the pins last, so TX is already idle high when PD2 starts driving it
+    # TX pin last, so the line is already idle high when PD2 starts driving it
     li t0, GPIOD_BASE
-    li t1, (1 << 3)
-    sw t1, GPIOD_BSHR(t0)       # PD3 output latch = 1: pull-up, not pull-down (7.3.1.3)
-    lw t1, 0x00(t0)             # GPIOD_CFGLR (7.3.1.1): per pin CNF[1:0], reserved, MODE
-    li t2, ~((0xf << (4*2)) | (0xf << (4*3)))
+    lw t1, 0x00(t0)             # GPIOD_CFGLR
+    li t2, ~(0xf << (4*2))
     and t1, t1, t2
-    li t2, (0b1001 << (4*2)) | (0b1000 << (4*3))
-    or t1, t1, t2               # PD2: CNF = 10 alternate push-pull, MODE = 1 output;
-    sw t1, 0x00(t0)             # PD3: CNF = 10 input with pull-up, MODE = 0 input
+    li t2, (0b1001 << (4*2))
+    or t1, t1, t2
+    sw t1, 0x00(t0)             # PD2: CNF = 10 alternate push-pull, MODE = 1 output
     ret
 
 # mkey? ( -- flag )     True if the modem has sent a byte that mkey has not read
