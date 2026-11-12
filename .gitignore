@@ -1,0 +1,6 @@
+*.hex
+*.bin
+*.elf
+*.o
+*.dump
+__pycache__/
