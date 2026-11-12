@@ -99,7 +99,7 @@ hardware.
 
 - Flash 0x00000000: kernel + `.rodata`, **must stay under 16 KiB** (`FLASH` `LENGTH` in
   `src/board/ch32v006f8u6/linker.ld`; confirm it says 16k).
-  Currently 13,072 bytes (177 words). Report the size after every change.
+  Currently 13,384 bytes (181 words). Report the size after every change.
 - Flash 0x08004000-0x08006800: source-replay log (10 KiB).
 - Flash 0x08006800-0x0800F800 (`USER_FLASH`..`FLASH_TOP`, 36 KiB): the application's own
   data, written a 256-byte page at a time with `fpage-erase ( page -- )` and
@@ -108,15 +108,16 @@ hardware.
   see `etc/answers.md`). The phonebook and the SMS stay on the SIM.
 - RAM 0x20000000: the user dictionary grows up from here (`HERE`). It is **empty after
   boot**: every kernel word lives in flash.
-  `FORTH_SIZE` = 0x19C0 = **6,592 bytes** of dictionary budget, up to `DICT_TOP` (which is
+  `FORTH_SIZE` = 0x19B8 = **6,584 bytes** of dictionary budget, up to `DICT_TOP` (which is
   `MRING` now).
 - RAM, top down: `DSP_TOP` 0x20002000, `RSP_TOP` 0x20001F00, `TIB_TOP` 0x20001E00,
   `TIB_BOTTOM` 0x20001D00 (256 B), `var_STATE` 0x20001CFC, `var_TOIN` 0x20001CF8,
   `var_HERE` 0x20001CF4, `var_LATEST` 0x20001CF0, then log bookkeeping, `var_BASE`
   0x20001CD8, `var_HLD`, `var_CONTEXT`, `var_CURRENT`, `var_VOCLINK` 0x20001CC8, `var_MRD`,
-  `var_MTIMEOUT` 0x20001CC0, `PAD` 0x20001BC0, `LOGBUF` 0x20001AC0, `MRING` 0x200019C0 (the
-  modem's 256-byte receive ring) = `DICT_TOP`. RAM-variable cells are named `var_X` as in jonesforth, so
-  the bare names stay free for word labels; `TIB_BOTTOM` is the start of the input buffer.
+  `var_MTIMEOUT` 0x20001CC0, `var_OUT`, `var_IN` 0x20001CB8 (the I/O vectors), `PAD`
+  0x20001BB8, `LOGBUF` 0x20001AB8, `MRING` 0x200019B8 (the modem's 256-byte receive ring)
+  = `DICT_TOP`. RAM-variable cells are named `var_X` as in jonesforth, so the bare names
+  stay free for word labels; `TIB_BOTTOM` is the start of the input buffer.
   New buffers (modem line, display frame, SD sectors) are carved out below the lowest one
   the same way, in `01-variables-constants.s`, and `DICT_TOP` moves down to the new one:
   every dictionary bounds check and the error path's zero-fill stop at `DICT_TOP`. Each
@@ -199,7 +200,7 @@ Layout:
 - `src/12-flash-log.s` holds the source log and the user flash page words.
 - `src/13-ticks.s` holds `ticks` and `ms` (SysTick, polled).
 - `src/14-modem.s` holds the modem UART: USART2 received by DMA into `MRING`, and the
-  words `mkey?` `mkey` `memit` `mtimeout`.
+  words `mkey?` `mkey` `memit` `mtimeout` `>modem` `<modem`.
 - `emulators/` holds `rv32emu.py` (the owner's RV32EC emulator: alignment, RV32E register
   use, FPEC sequencing and illegal instructions all fault), `harness.py` (boots
   `../sixforths.bin` in it), `test_fotrh.py` (the tests; it loads `../prelude.f`) and
@@ -336,20 +337,15 @@ The steps:
    error, and neither `reboot` nor a hardware reset left a junk byte. Not yet: the A7670E
    itself (read the HAT schematic in `docs/A7670X` for its UART voltage first). Found on the way: the interpreter compiled into a
    definition with no bounds check, and `;` unhid before its check (fixed, `b13ad53`).
-4. **Vectored `emit` and `key`.** One RAM cell holds the routine `emit`, `type`, `."` and
-   `.` send through (console, modem or display), another the one `key` and `key?` read from
-   (console, `mkey`, or the keypad's characters from step 6). `mkey?` `mkey` `memit` stay as
-   words of their own: the phone's main loop polls the console, the modem and the keys side
-   by side.
-   **Errors must work without a console.** On the finished phone nothing is connected to
-   USART1, so an error must not fall back to the console REPL (the owner, 2026-11-12).
-   `reset` restarts the word held in a RAM cell instead: the REPL by default (developing,
-   with a PC attached), or the phone's main loop, which puts itself there when it starts
-   (from the last line of the log). That word sets the vectors it needs and shows the
-   error: the REPL on the console as now, the phone on the LED matrix (for example `?` and
-   the word's name), cleared with a key. A trap still sends `T<mcause> <mepc>` to the
-   console; on the phone it then resets the chip (later through the watchdog) instead of
-   hanging. A REPL on the matrix and the 8 keys is possible later, but slow.
+4. **Vectored `emit` and `key`.** **Done in the emulator 2026-11-12, not yet on the board.**
+   `var_OUT` holds the routine `emit` `space` `cr` `type` `words` (and so `.` `u.` `."` `.s`
+   `dump`) send through; `var_IN` points at an input table (get, ready) that `key` and `key?`
+   use. `>console` `>modem` and `<console` `<modem` set them (step 6 adds the keypad,
+   the display step `>display`); the modem's `key` gives -1 after `mtimeout` ms. The REPL's
+   echo, `ok`, error messages, the banner and the trap line always use the console, and
+   `reset` (boot and every error) sets both vectors back to the console. `mkey?` `mkey`
+   `memit` stay as words of their own: the phone's main loop polls the console, the modem
+   and the keys side by side. The owner moved the error part of this step to step 7.
 5. **Tick interrupt** (about every 2 ms): refresh one LED row
    (`docs/output/LED-matrix/Bitbang-LED-matrix.S` already keeps to the allowed registers),
    sample the 8 keys through the 74HC165, count time. This is the one interrupt.
@@ -360,4 +356,15 @@ The steps:
    the current mode's vocabulary, and a handler that builds a name from the key mask
    (`k13` for keys 1 and 3) and looks it up with `find-name-in`, then in a common
    vocabulary. Do not switch CONTEXT from the key handler.
+   **Errors must work without a console** (moved here from step 4). On the finished phone
+   nothing is connected to USART1, so an error must not fall back to the console REPL (the
+   owner, 2026-11-12). `reset` restarts the word held in a RAM cell instead: the REPL by
+   default (developing, with a PC attached), or the phone's main loop, which puts itself
+   there when it starts (from the last line of the log). That word sets the vectors it
+   needs and shows the error, kept in RAM by the error path: the REPL on the console as
+   now, the phone on the LED matrix (for example `?` and the word's name), cleared with a
+   key. A trap still sends `T<mcause> <mepc>` to the console; on the phone it then resets
+   the chip (later through the watchdog) instead of hanging. A restart word that fails at
+   once would restart forever: a hardware reset clears the RAM cell, and PD4 skips a log
+   that sets it again. A REPL on the matrix and the 8 keys is possible later, but slow.
 8. **Call log** in the user flash, 16-byte records (format in `etc/answers.md`).

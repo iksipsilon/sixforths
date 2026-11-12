@@ -421,12 +421,38 @@ tm("an error keeps the unread modem bytes", "1 ms nosuchword\nmkey emit mkey emi
    absent=())
 tm("after reboot the modem works again", "reboot\n65 memit mkey .", "mkey .\n65 ", loop=True)
 
+# ---- vectored output and input: >console >modem <console <modem ----
+def tv(name, src, console, to_modem, modem=b"", loop=False, absent=("  ?",), exact=True):
+    """console: substrings the console must show; to_modem: what the modem must get."""
+    e = copy.deepcopy(P)
+    e.uart2_in, e.uart2_loopback = list(modem), loop
+    out, steps = h.feed(e, src + "\n")
+    got = bytes(e.uart2_out)
+    same = got == to_modem if exact else to_modem in got
+    check(name, e, out + f" [modem {'ok' if same else 'got ' + repr(got)}]", list(console) + ["[modem ok]"], absent)
+
+tv(">modem: emit goes to the modem", ">modem 65 emit >console 66 emit", ["emit\nB   ok"], b"A")
+tv(">modem: . space cr", ">modem 42 . space cr >console", ["\n   ok"], b"42  \r\n")
+tv('>modem: ." and type in a definition', ': at ." AT" s" +CSQ" type 13 emit ; >modem at >console', ["\n   ok"],
+   b"AT+CSQ\r")
+tv(">modem: words", ">modem words >console", [">console\n   ok"], b" <modem >modem mtimeout ", exact=False)
+tv("the echo and ok stay on the console", ">modem 66 emit\n67 emit", [">modem 66 emit\n   ok\n67 emit\n   ok"], b"BC")
+tv("an error switches back to the console", ">modem <modem nosuchword\n65 emit key? .", ["  ?", "key? .\nA0 "], b"",
+   absent=())
+tv("reboot switches back to the console", ">modem reboot\n65 emit", ["emit\nA"], b"", absent=())
+tm("<modem: key reads the modem", "<modem key emit key emit <console", "<console\nOK", modem=b"OK")
+tm("<modem: key? sees a modem byte", "<modem 1 ms key? . key emit key? . <console", "-1 Q0 ", modem=b"Q")
+tm("<modem: key gives -1 after mtimeout", "10 mtimeout ! <modem key . <console", "<console\n-1 ")
+tm("<console: key reads the console again", "<modem <console key emit\nZ", "emit\nZ")
+tm(">modem emit, <modem key: round trip over the wire", ">modem 72 emit >console <modem key emit <console",
+   "<console\nH", loop=True)
+
 # ---- words ----
 e, out, _ = h.session(P, "words\n")
 names = out.split("\n")[1].split()                # line 0 is the echoed input
 print("word count:", len(names))
 check("words lists new primitives", e, out, ["um/mod", "xdoes", "find-name", "parse", "um*", "quit"])
-check("words lists the modem words, then ms and ticks", e, out, ["\n mtimeout memit mkey mkey? ms ticks wipe "])
+check("words lists the modem words, then ms and ticks", e, out, ["\n <modem >modem mtimeout memit mkey mkey? ms ticks wipe "])
 
 print("\nALL PASS" if failures == 0 else f"\n{failures} FAILURES")
 sys.exit(1 if failures else 0)

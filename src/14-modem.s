@@ -86,8 +86,9 @@ modem_init:
     sw t1, 0x00(t0)             # PD2: CNF = 10 alternate push-pull, MODE = 1 output
     ret
 
-# mkey? ( -- flag )     True if the modem has sent a byte that mkey has not read
-defcode "mkey?",5,,MKEYQ
+# is a modem byte waiting that has not been read? a0 = -1 if so, else 0
+# clobbers: a1, a2, a3
+modem_ready:
     li a1, DMA1_BASE
     lw a2, DMA_CNTR7(a1)
     li a3, MRING_SIZE
@@ -96,20 +97,19 @@ defcode "mkey?",5,,MKEYQ
     li a1, var_MRD
     lw a3, 0(a1)                # a3 = read offset
     sub a2, a2, a3
-    snez a2, a2
-    neg a2, a2                  # -1 if they differ, else 0
-    PUSH a2
-    NEXT
+    snez a0, a2
+    neg a0, a0                  # -1 if they differ, else 0
+    ret
 
-# mkey ( -- c | -1 )    The next byte from the modem. Waits at most mtimeout ms
-# for one (counting SysTick milliseconds like ms; mtimeout <= 0 does not wait)
-# and gives -1 if none came. No byte is -1, so test the result with 0< .
-defcode "mkey",4,,MKEY
+# the next modem byte: a0 = the byte, or -1 if none came within mtimeout ms
+# (counting SysTick milliseconds like ms; mtimeout <= 0 does not wait)
+# clobbers: a1-a5, t1, t2
+modem_get:
     li a1, var_MTIMEOUT
     lw a1, 0(a1)                # a1 = milliseconds still to wait
     li a2, STK_BASE
     lw a3, STK_CNTL(a2)         # a3 = the count when the current millisecond began
-mkey_poll:
+modem_get_poll:
     li t1, DMA1_BASE
     lw t1, DMA_CNTR7(t1)
     li t2, MRING_SIZE
@@ -117,45 +117,85 @@ mkey_poll:
     andi t1, t1, MRING_SIZE-1   # t1 = write offset
     li t2, var_MRD
     lw a4, 0(t2)                # a4 = read offset
-    bne t1, a4, mkey_take       # a byte is waiting
-    blez a1, mkey_none          # waited long enough (signed, like ms)
+    bne t1, a4, modem_get_take  # a byte is waiting
+    blez a1, modem_get_none     # waited long enough (signed, like ms)
     lw a5, STK_CNTL(a2)
     sub a5, a5, a3              # ticks into this millisecond
     li t1, STK_TICKS_PER_MS
-    bltu a5, t1, mkey_poll
+    bltu a5, t1, modem_get_poll
     add a3, a3, t1              # the next millisecond begins exactly 3000 ticks later
     addi a1, a1, -1
-    j mkey_poll
-mkey_take:
+    j modem_get_poll
+modem_get_take:
     li t1, MRING
     add t1, t1, a4
-    lbu a5, 0(t1)               # the byte
+    lbu a0, 0(t1)               # the byte
     addi a4, a4, 1
     andi a4, a4, MRING_SIZE-1
     sw a4, 0(t2)                # one further (t2 = var_MRD)
-    PUSH a5
-    NEXT
-mkey_none:
-    li a5, -1
-    PUSH a5
+    ret
+modem_get_none:
+    li a0, -1
+    ret
+
+# send the low byte of a0 to the modem. Waits only for USART2's data
+# register, which frees within one byte time (87 us at 115200).
+# clobbers: t0, t1 (like uart_put, so it can be the output vector)
+modem_put:
+    li t0, USART2_BASE
+modem_put_wait:
+    lw t1, USART_STATR(t0)
+    andi t1, t1, USART_STATR_TXE
+    beqz t1, modem_put_wait
+    andi t1, a0, 0xFF
+    sw t1, USART_DATAR(t0)
+    ret
+
+# the modem as an input source for var_IN (see <modem): get, ready
+.balign CELL
+in_modem:
+    .word modem_get, modem_ready
+
+# mkey? ( -- flag )     True if the modem has sent a byte that mkey has not read
+defcode "mkey?",5,,MKEYQ
+    call modem_ready
+    PUSH a0
     NEXT
 
-# memit ( c -- )        Send the low byte of c to the modem. Waits only for
-# USART2's data register, which frees within one byte time (87 us at 115200).
+# mkey ( -- c | -1 )    The next byte from the modem. Waits at most mtimeout ms
+# for one and gives -1 if none came. No byte is -1, so test it with 0< .
+defcode "mkey",4,,MKEY
+    call modem_get
+    PUSH a0
+    NEXT
+
+# memit ( c -- )        Send the low byte of c to the modem
 defcode "memit",5,,MEMIT
     checkunderflow 0
-    POP a1
-    andi a1, a1, 0xFF
-    li a2, USART2_BASE
-memit_wait:
-    lw a3, USART_STATR(a2)
-    andi a3, a3, USART_STATR_TXE
-    beqz a3, memit_wait
-    sw a1, USART_DATAR(a2)
+    POP a0
+    call modem_put
     NEXT
 
 # mtimeout ( -- addr )  Variable: how many ms mkey waits for a byte (1000 at boot)
 defcode "mtimeout",8,,MTIMEOUT
     li t1, var_MTIMEOUT
     PUSH t1
+    NEXT
+
+# >modem ( -- )         emit, type and the words built on them send to the
+# modem, e.g.  >modem ." AT" 13 emit >console  (inside a definition). The
+# REPL's echo, ok and error messages stay on the console; an error switches
+# back to >console <console.
+defcode ">modem",6,,TOMODEM
+    la t1, modem_put
+    li t0, var_OUT
+    sw t1, 0(t0)
+    NEXT
+
+# <modem ( -- )         key and key? read from the modem (key gives -1 if
+# nothing came within mtimeout ms)
+defcode "<modem",6,,FROMMODEM
+    la t1, in_modem
+    li t0, var_IN
+    sw t1, 0(t0)
     NEXT

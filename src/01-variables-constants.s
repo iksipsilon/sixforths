@@ -46,7 +46,15 @@
 # CH32V006 PORT: modem receive (14-modem.s)
 .equ var_MRD, var_VOCLINK - CELL        # 1 CELL: offset in MRING of the next byte mkey reads
 .equ var_MTIMEOUT, var_MRD - CELL       # 1 CELL: how many ms mkey waits for a byte (see mtimeout)
-.equ PAD, var_MTIMEOUT - (CELL * 64)    # 64 CELLS between var_MTIMEOUT and PAD
+# CH32V006 PORT: I/O vectors. var_OUT: the routine emit, type and the words
+# built on them send a character through (a0 = the character; it may clobber
+# t0 and t1 only, like uart_put). var_IN: an input table, [0] = get a
+# character (a0 = it, or -1), [CELL] = is one waiting (a0 = 0 or -1). Errors
+# and boot point both at the console (reset). The REPL itself always uses the
+# console: its echo, ok and the error messages do not follow these.
+.equ var_OUT, var_MTIMEOUT - CELL       # 1 CELL: output routine (see >console >modem)
+.equ var_IN, var_OUT - CELL             # 1 CELL: input table (see <console <modem)
+.equ PAD, var_IN - (CELL * 64)          # 64 CELLS between var_IN and PAD
 # CH32V006 PORT: pending batch buffer for the log. Lines of a multi-line
 # definition are held here and committed to flash only when a line ends with
 # STATE = 0, so a definition reaches the log whole or not at all.

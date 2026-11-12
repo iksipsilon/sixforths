@@ -77,7 +77,7 @@ _start:
 .include "10-forth-words.s"       # colon words kept in flash as threads (CH32V006 port)
 .include "12-flash-log.s"         # source-replay log: flash persistence (CH32V006 port)
 .include "13-ticks.s"             # ticks and ms: the SysTick counter (CH32V006 port)
-.include "14-modem.s"             # mkey? mkey memit mtimeout: USART2 + DMA ring (CH32V006 port)
+.include "14-modem.s"             # mkey? mkey memit mtimeout >modem <modem: USART2 + DMA ring (CH32V006 port)
 
 # CH32V006 PORT: header of the last word in flash. defcode/defword chain the
 # words in assembly order through `link` (02-macros.s); LATEST starts here.

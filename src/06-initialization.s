@@ -117,6 +117,15 @@ reset_replay_done:
     li t1, var_CURRENT
     sw t0, 0(t1)
 
+    # CH32V006 PORT: and output and input are the console's again (>console
+    # <console), so the REPL is never left talking to the modem
+    li t0, var_OUT
+    la t1, uart_put
+    sw t1, 0(t0)
+    li t0, var_IN
+    la t1, in_console
+    sw t1, 0(t0)
+
 .balign CELL
 # reset the RAM from the last defined word
 ram_init:

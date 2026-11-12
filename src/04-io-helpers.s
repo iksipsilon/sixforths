@@ -78,3 +78,47 @@ uart_print_done:
     lw ra, 0(s0)                # CH32V006 PORT: restore the return address from the RSP
     addi s0, s0, CELL           # drop it from the return stack
     ret
+
+##
+# CH32V006 PORT: vectored output and input (var_OUT, var_IN in
+# 01-variables-constants.s). uart_put / uart_print / uart_get above stay the
+# console's own routines: the REPL and the error messages use them directly.
+##
+
+# send a0 through the output vector (console, modem, ...)
+# clobbers: t0, t1 (every output routine keeps to those, like uart_put)
+out_put:
+    li t0, var_OUT
+    lw t0, 0(t0)
+    jr t0                       # the routine returns straight to our caller
+
+# print a string through the output vector, like uart_print does to the console
+# arguments: a1 = start, a2 = end; clobbers: a0, a1, t0, t1
+out_print:
+    addi s0, s0, -CELL          # spill ra to the return stack, unchecked, as
+    sw ra, 0(s0)                # uart_print does (one cell deep)
+out_print_loop:
+    beq a1, a2, out_print_done
+    lbu a0, 0(a1)
+    call out_put
+    addi a1, a1, 1
+    j out_print_loop
+out_print_done:
+    lw ra, 0(s0)
+    addi s0, s0, CELL
+    ret
+
+# is a console character waiting? a0 = -1 if one is, else 0. clobbers t0, t1
+console_ready:
+    li t0, UART_BASE_ADDRESS
+    lw t1, UART_RX_STATUS(t0)
+    andi t1, t1, UART_RX_BIT
+    snez a0, t1
+    neg a0, a0
+    ret
+
+# the console as an input source for var_IN: get (uart_get, which serves the
+# boot replay from the log too), ready
+.balign CELL
+in_console:
+    .word uart_get, console_ready

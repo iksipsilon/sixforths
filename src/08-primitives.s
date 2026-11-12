@@ -1080,13 +1080,13 @@ defcode "count",5,,COUNT
     PUSH a2
     NEXT
 
-# type ( a u -- )       Send u characters starting at a to the console
+# type ( a u -- )       Send u characters starting at a to the output
 defcode "type",4,,TYPE
     checkunderflow CELL
     POP a2                      # u
     POP a1                      # a
-    add a2, a1, a2              # uart_print wants start and end
-    call uart_print             # (clobbers a0, a1, t0, t1)
+    add a2, a1, a2              # out_print wants start and end
+    call out_print              # (clobbers a0, a1, t0, t1)
     NEXT
 
 # s= ( a1 a2 u -- f )   True if the u bytes at a1 and at a2 are the same
@@ -1406,7 +1406,7 @@ defcode "state",5,,STATE
 # vocabulary, newest first (FORTH unless a vocabulary was selected:
 # `edit words forth` lists the bindings of edit).
 defcode "words",5,,WORDS
-    li a3, var_CONTEXT  # a3 (Z) survives uart_print/uart_put (they clobber
+    li a3, var_CONTEXT  # a3 (Z) survives out_print/out_put (they clobber
     lw a3, 0(a3)        # only a0-a2, t0, t1, ra) so it holds the chain pointer
     lw a3, 0(a3)        # newest word of the context vocabulary
 words_loop:
@@ -1415,13 +1415,13 @@ words_loop:
     andi t1, t0, F_HIDDEN
     bnez t1, words_next # don't list hidden words
     li a0, CHAR_SPACE
-    call uart_put       # print a separating space first (emit's convention,
+    call out_put        # print a separating space first (emit's convention,
                         # also separates the list from the echoed command)
-    lbu t0, CELL(a3)    # reload the flags+length byte (uart_put clobbers t0)
+    lbu t0, CELL(a3)    # reload the flags+length byte (out_put clobbers t0)
     andi t0, t0, F_LENMASK
     addi a1, a3, CELL+1 # a1 = name start
     add a2, a1, t0      # a2 = name end
-    call uart_print     # print the name
+    call out_print      # print the name
 words_next:
     lw a3, 0(a3)        # follow the link to the previous word
     j words_loop
@@ -1563,43 +1563,64 @@ forget_here:
 # Input and output
 ##
 
-# key ( -- x )          Read 8-bit character from uart input
+# CH32V006 PORT: key key? emit space cr type words use the I/O vectors
+# (var_IN, var_OUT), set by <console <modem >console >modem and by reset.
+
+# key ( -- x )          The next character from the input source (<console,
+# <modem). The modem gives -1 if nothing came within mtimeout ms.
 defcode "key",3,,KEY
-    call uart_get       # read character from uart into W
+    li t0, var_IN
+    lw t0, 0(t0)        # the input table
+    lw t0, 0(t0)        # its get routine
+    jalr t0             # a0 = the character
     PUSH a0             # store character into top of data stack
     NEXT
 
-# key? ( -- f )         True if the console UART has a character waiting.
-# Looks at the hardware only: during the boot replay `key` is served from
-# the flash log instead, so do not call key or key? from replayed lines.
+# key? ( -- f )         True if the input source has a character waiting.
+# The console's looks at the hardware only: during the boot replay `key` is
+# served from the flash log instead, so do not call key or key? from
+# replayed lines.
 defcode "key?",4,,KEYQ
-    li t0, UART_BASE_ADDRESS
-    lw t1, UART_RX_STATUS(t0)
-    andi t1, t1, UART_RX_BIT
-    snez t1, t1
-    neg t1, t1
-    PUSH t1                     # (clobbers t0, already consumed)
+    li t0, var_IN
+    lw t0, 0(t0)        # the input table
+    lw t0, CELL(t0)     # its ready routine
+    jalr t0             # a0 = 0 or -1
+    PUSH a0
     NEXT
 
-# emit ( x -- )         Write 8-bit character to uart output
+# emit ( x -- )         Send a character to the output (>console, >modem)
 defcode "emit",4,,EMIT
     checkunderflow 0    # check for stack underflow of data stack (1 CELL)
     POP a0              # copy top of data stack into W
-    call uart_put       # send character from W to uart
+    call out_put        # send character from W through the output vector
     NEXT
 
 # space ( -- )          Send one space
 defcode "space",5,,SPACE
     li a0, CHAR_SPACE
-    call uart_put
+    call out_put
     NEXT
 
 # cr ( -- )             Send CR LF
 defcode "cr",2,,CR
     li a0, CHAR_CARRIAGE
-    call uart_put
+    call out_put
     li a0, CHAR_NEWLINE
-    call uart_put
+    call out_put
+    NEXT
+
+# >console ( -- )       emit, type and the words built on them send to the console
+defcode ">console",8,,TOCONSOLE
+    la t1, uart_put
+    li t0, var_OUT
+    sw t1, 0(t0)
+    NEXT
+
+# <console ( -- )       key and key? read from the console
+defcode "<console",8,,FROMCONSOLE
+    la t1, in_console
+    li t0, var_IN
+    sw t1, 0(t0)
     NEXT
 
 # bl ( -- 32 )          The space character
