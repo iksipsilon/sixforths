@@ -60,6 +60,12 @@
 .equ FLASH_ALIAS, 0x08000000
 .equ LOG_BASE, FLASH_ALIAS + 0x4000     # bottom of the source-replay log
 .equ LOG_TOP, FLASH_ALIAS + 0x6800      # top of the log (10 KiB region)
+# Above the log: flash for the application's own data (call log, settings),
+# written a 256-byte page at a time with fpage-erase / fpage-prog. Those two
+# words refuse any address outside USER_FLASH..FLASH_TOP, so they cannot
+# damage the kernel or the source log.
+.equ USER_FLASH, LOG_TOP                # first page of the user flash
+.equ FLASH_TOP, FLASH_ALIAS + 0xF800    # end of the 62 KiB code flash
 
 ##
 # Interpreter constants

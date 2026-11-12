@@ -1087,6 +1087,62 @@ defcode "type",4,,TYPE
     call uart_print             # (clobbers a0, a1, t0, t1)
     NEXT
 
+# s= ( a1 a2 u -- f )   True if the u bytes at a1 and at a2 are the same
+# (u = 0: true). For matching what the modem sent against a known text:
+#   line s" RING" s=      (s" leaves its length on top, which is the u here)
+# Not CamelForth's S=, which returns a difference instead of a flag.
+defcode "s=",2,,SEQUAL
+    checkunderflow 2*CELL
+    POP a3                      # u
+    POP a2                      # a2
+    lw a1, 0(sp)                # a1
+    li t1, -1                   # equal until a byte differs
+sequal_loop:
+    beqz a3, sequal_done
+    lbu a4, 0(a1)
+    lbu a5, 0(a2)
+    bne a4, a5, sequal_diff
+    addi a1, a1, 1
+    addi a2, a2, 1
+    addi a3, a3, -1
+    j sequal_loop
+sequal_diff:
+    li t1, 0
+sequal_done:
+    sw t1, 0(sp)
+    NEXT
+
+# scan ( a u c -- a' u' )   Step forward to the first character c. a' points
+# at it and u' counts it and everything after it; u' = 0 if c is not there.
+defcode "scan",4,,SCAN
+    checkunderflow 2*CELL
+    POP a3                      # c
+    lw a2, 0(sp)                # u
+    lw a1, CELL(sp)             # a
+scan_loop:
+    beqz a2, scan_done
+    lbu a4, 0(a1)
+    beq a4, a3, scan_done
+    addi a1, a1, 1
+    addi a2, a2, -1
+    j scan_loop
+scan_done:
+    sw a1, CELL(sp)
+    sw a2, 0(sp)
+    NEXT
+
+# /string ( a u n -- a+n u-n )   Drop the first n characters of a string
+defcode "/string",7,,SLASHSTRING
+    checkunderflow 2*CELL
+    POP a3                      # n
+    lw a2, 0(sp)                # u
+    lw a1, CELL(sp)             # a
+    add a1, a1, a3
+    sub a2, a2, a3
+    sw a1, CELL(sp)
+    sw a2, 0(sp)
+    NEXT
+
 ##
 # Compiler and dictionary
 ##

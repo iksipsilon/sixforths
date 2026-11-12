@@ -141,6 +141,15 @@ t("parse-name", ": pn parse-name type ; pn hello", "hello")
 t("number ok", ': nn s" 123" number . . ; nn', "0 123 ")
 t("number bad", ': nb s" 12x" number nip 0= . ; nb', "0 ")
 
+t("s= equal", ': q1 s" RING" drop s" RING" s= . ; q1', "-1 ")
+t("s= on a prefix", ': q2 s" RINGO" drop s" RING" s= . ; q2', "-1 ")
+t("s= differs in the last byte", ': q3 s" RINK" drop s" RING" s= . ; q3', "0 ")
+t("s= of nothing", "pad pad 1+ 0 s= .", "-1 ")
+t("scan finds", ': q4 s" ab,cd" 44 scan type ; q4', ",cd")
+t("scan misses", ': q5 s" abc" 44 scan . drop ; q5', "0 ")
+t("/string", ': q6 s" hello" 2 /string type ; q6', "llo")
+t("a field of a modem line", ': q7 s" +CLIP: 123,145" 32 scan 1 /string 2dup 44 scan nip - type ; q7', "q7\n123")
+
 # ---- tick, execute, find ----
 t("[']", ": tt ['] dup ; 5 tt execute . .", "5 5 ")
 t("' execute", "' words execute", " words ")
@@ -285,6 +294,24 @@ except RuntimeError:
     pass
 f, e.fault = e.fault, None
 check("emulator: halfword flash writes fault", e, f"fault={f}", ["flash-write16"])
+
+# ---- user flash pages ----
+UF = 0xE800
+e, out, _ = h.session(P, "pad 256 65 fill pad 0x0800E800 fpage-prog 0x0800E800 c@ . 0x0800E8FF c@ .\n")
+check("fpage-prog programs a page", e, out + f" {bytes(e.f[UF:UF+256]) == b'A' * 256}", ["65 65 ", "True"])
+out, _ = h.feed(e, "pad 0x0800E800 fpage-prog 66 emit\n")
+check("fpage-prog refuses a page that is not erased", e, out, ["  ?"], absent=("B",))
+out, _ = h.feed(e, "0x0800E8AA fpage-erase 0x0800E800 c@ .\n")
+check("fpage-erase (any address in the page)", e, out + f" {bytes(e.f[UF:UF+256]) == bytes([255]) * 256}", ["255 ", "True"])
+for name, src in (("the kernel", "0x08000000 fpage-erase"), ("the log", "0x08004000 fpage-erase"),
+                  ("the last log page", "0x080067FF fpage-erase"), ("beyond the flash", "0x0800F800 fpage-erase"),
+                  ("an alias address", "0x0000E800 fpage-erase"), ("prog into the kernel", "pad 0x08000100 fpage-prog"),
+                  ("an unaligned source", "pad 1+ 0x0800E800 fpage-prog")):
+    e, out, _ = h.session(P, src + " 66 emit\n")
+    same = bytes(e.f[:0x10000]) == bytes(P.f[:0x10000])
+    check(f"flash page words refuse {name}", e, out + f" {same}", ["  ?", "True"], absent=("B",))
+e, out, _ = h.session(P, "0x0800F7FF fpage-erase 0x08006800 fpage-erase 65 emit\n")
+check("first and last user page are allowed", e, out, ["emit\nA"])
 
 # ---- words ----
 e, out, _ = h.session(P, "words\n")

@@ -314,6 +314,58 @@ defcode "-log",4,,MLOG
     sw zero, 0(t0)
     NEXT
 
+##
+# Flash page words for the application's data (above the log)
+##
+
+.balign CELL
+# check a page address for the two words below
+# arguments: a0 = any address in the page
+# returns: a0 = the page address (rounded down to 256 bytes); jumps to the
+# error handler unless the page lies in USER_FLASH..FLASH_TOP
+# clobbers: t0
+flash_user_page:
+    andi a0, a0, -FLASH_PAGE
+    li t0, USER_FLASH
+    bltu a0, t0, err_error
+    li t0, FLASH_TOP
+    bgeu a0, t0, err_error
+    ret
+
+# fpage-erase ( page -- )   Erase one 256-byte page of the user flash (it then
+# reads 0xFF). page is a 0x08...... address, e.g. 0x0800E800. Takes about 3 ms,
+# during which the core stands still. Errors with ? outside the user flash.
+defcode "fpage-erase",11,,FPAGEERASE
+    checkunderflow 0
+    POP a0
+    call flash_user_page
+    call fpage_erase            # (clobbers t0, t1)
+    NEXT
+
+# fpage-prog ( src page -- )   Program one 256-byte page of the user flash
+# from the 256 bytes at src (RAM, CELL-aligned). The page must be erased:
+# flash can only clear bits, so the word checks and errors with ? instead of
+# writing a mix of old and new. Errors too if src is unaligned or the page is
+# outside the user flash. To change part of a page: copy it to RAM, change
+# the copy, fpage-erase, fpage-prog. Compare afterwards with  s=  if needed.
+defcode "fpage-prog",10,,FPAGEPROG
+    checkunderflow CELL
+    POP a0                      # page
+    POP a2                      # source
+    andi t0, a2, CELL-1
+    bnez t0, err_error          # the source must be CELL-aligned
+    call flash_user_page
+    mv a3, a0                   # the page must read all 0xFF
+    addi a4, a0, FLASH_PAGE
+fpageprog_blank:
+    lw t1, 0(a3)
+    addi t1, t1, 1              # 0xFFFFFFFF + 1 = 0
+    bnez t1, err_error
+    addi a3, a3, CELL
+    bne a3, a4, fpageprog_blank
+    call fpage_prog             # a0 = page, a2 = source (clobbers t0-t2, a2-a4)
+    NEXT
+
 # wipe ( -- )           Erase the whole log region and disable logging
 defcode "wipe",4,,WIPE
     li t0, LOGEN
