@@ -46,9 +46,20 @@ hardware.
 
 ## Forth architecture
 
-- Registers: `sp` = data stack, `s0` = return stack, `s1` = IP, `a0` = W,
-  `a1-a3` = X/Y/Z scratch, `a4`, `a5`, `gp`, `tp` = more scratch.
-  **`t0` is clobbered by PUSH / POP / PUSHRSP / POPRSP / checkunderflow macros.**
+- Registers: `sp` = DSP (data stack), `s0` = RSP (return stack), `s1` = IP, `a0` = W.
+  How to remember them: the three registers that start with "s" are the three Forth
+  pointers, and W is the first argument register (NEXT hands W to the code-field routine).
+  `sp`, `s0`, `s1` are also the registers no subroutine and no interrupt touches.
+  Registers keep their ABI names in the source; there are no aliases.
+- Scratch inside a primitive: `t0-t2`, `a1-a5`, `gp`, `tp`. Prefer `a1-a5` in new code: the
+  2-byte forms of `lw` / `sw` through a pointer, `and` / `or` / `xor` / `sub` and `beqz` /
+  `bnez` only take `s0`, `s1`, `a0-a5`. **`t0` is clobbered by PUSH / PUSHRSP / POPRSP /
+  checkunderflow** (not by POP). **NEXT clobbers `a5`.** `ra` is for `call` / `ret` only.
+- **Nothing may be stored below `sp`.** The QingKe V2 stacks its 48-byte interrupt frame at
+  `sp` (hardware prologue, processor manual 3.4), and `sp` is the data stack. PUSH and
+  PUSHRSP therefore move the pointer first, then store; to push `sp` itself, copy it to a
+  register first (see `sp@`). `IRQ_FRAME` (48 bytes) stays free under the data stack for one
+  frame, so it holds 52 cells and interrupts must not nest.
 - Indirect threaded. Word header: link cell, flags+length byte, name, zero padding to
   a cell boundary, then the code field. Flags: `F_IMMEDIATE` 0x80, `F_HIDDEN` 0x20,
   `F_LENMASK` 0x1f, so **names are at most 31 characters**.
@@ -66,7 +77,21 @@ hardware.
 - Forth truth values are -1 / 0. `'` is state-smart. `branch` / `0branch` targets are
   absolute addresses. `emit` sends exactly one byte (no leading space).
 - `number` parses decimal or `0x` hex (uppercase A-F). There is no BASE for input;
-  `base` (defined in `prelude.f`) only affects output words.
+  `base` (a RAM cell, `var_BASE`) only affects output words.
+- HERE may be unaligned after `c,` or an odd `allot`. `,`, `:`, `create` and the error path
+  round it up themselves; a misaligned `sw` would trap.
+- After every error `reset` calls `abandon_def`: if the newest word is still hidden (a word
+  is hidden exactly while it is compiled) it is unlinked and HERE moves back. `reset` also
+  puts CONTEXT and CURRENT back to FORTH.
+- Vocabularies, fig-Forth style. A vocabulary is known by its head cell (the cell holding
+  its newest word); FORTH's head cell is `var_LATEST`. `var_CONTEXT` = searched first (then
+  FORTH), `var_CURRENT` = where definitions go, `var_VOCLINK` = list of vocabularies for
+  `forget`. Words: `vocabulary` `definitions` `forth` `context` `current` `voc-link` `>body`
+  `dovoc`, and `find-name-in ( addr len voc -- header | 0 )` for one vocabulary only.
+  `latest` returns the head cell of CURRENT. Subroutines: `search_chain`, `search_order`,
+  `lookup` in `05-internal-functions.s`.
+- A variable cannot live in flash. A kernel variable is a RAM cell `var_X` in
+  `01-variables-constants.s` plus a `defcode` that pushes its address (`base`, `hld`).
 - CREATEd words are laid out `[header][cfa][DOES> slot][data]`.
   `dovar` / `docon` / `docol` / `xdoes` are the runtime code fields.
 
@@ -74,16 +99,24 @@ hardware.
 
 - Flash 0x00000000: kernel + `.rodata`, **must stay under 16 KiB** (`FLASH` `LENGTH` in
   `src/board/ch32v006f8u6/linker.ld`; confirm it says 16k).
-  Currently 8,828 bytes. Report the size after every change.
-- Flash 0x08004000-0x08006800: source-replay log (10 KiB). Space above that is
-  reserved for the phonebook / SMS storage. Do not touch it casually.
-- RAM 0x20000000: the user dictionary grows up from here (`HERE`).
-  `FORTH_SIZE` = 0x1ADC = **6,876 bytes** of dictionary budget (up to `LOGBUF`).
+  Currently 12,268 bytes (171 words). Report the size after every change.
+- Flash 0x08004000-0x08006800: source-replay log (10 KiB).
+- Flash 0x08006800-0x0800F800 (`USER_FLASH`..`FLASH_TOP`, 36 KiB): the application's own
+  data, written a 256-byte page at a time with `fpage-erase ( page -- )` and
+  `fpage-prog ( src page -- )`. Both words refuse any other address, so they cannot damage
+  the kernel or the log. Planned use: the call log in the top 4 KiB (0x0800E800-0x0800F7FF,
+  see `etc/answers.md`). The phonebook and the SMS stay on the SIM.
+- RAM 0x20000000: the user dictionary grows up from here (`HERE`). It is **empty after
+  boot**: every kernel word lives in flash.
+  `FORTH_SIZE` = 0x1AC8 = **6,856 bytes** of dictionary budget (up to `LOGBUF`).
 - RAM, top down: `DSP_TOP` 0x20002000, `RSP_TOP` 0x20001F00, `TIB_TOP` 0x20001E00,
   `TIB_BOTTOM` 0x20001D00 (256 B), `var_STATE` 0x20001CFC, `var_TOIN` 0x20001CF8,
-  `var_HERE` 0x20001CF4, `var_LATEST` 0x20001CF0, then log bookkeeping, `PAD` 0x20001BDC,
-  `LOGBUF` 0x20001ADC. RAM-variable cells are named `var_X` as in jonesforth, so the bare
-  names stay free for word labels; `TIB_BOTTOM` is the start of the input buffer.
+  `var_HERE` 0x20001CF4, `var_LATEST` 0x20001CF0, then log bookkeeping, `var_BASE`
+  0x20001CD8, `var_HLD`, `var_CONTEXT`, `var_CURRENT`, `var_VOCLINK` 0x20001CC8, `PAD`
+  0x20001BC8, `LOGBUF` 0x20001AC8. RAM-variable cells are named `var_X` as in jonesforth, so
+  the bare names stay free for word labels; `TIB_BOTTOM` is the start of the input buffer.
+  New buffers (modem line, display frame, SD sectors) are carved out below `LOGBUF` the
+  same way, in `01-variables-constants.s`; each one shrinks `FORTH_SIZE`.
 
 ## REPL quirks (they affect how tests and prelude files must be written)
 
@@ -118,6 +151,7 @@ Run from the repo root:
     make                              # sixforths.elf / .bin / .hex / .dump
     riscv64-unknown-elf-size sixforths.elf   # kernel size; text must stay under 16384
     python3 emulators/test_fotrh.py   # boots sixforths.bin in the emulator, loads prelude.f, runs all tests
+    python3 emulators/check_threads.py  # compares the threads in src/10-forth-words.s with the compiler's output
 
 The Makefile runs `riscv64-unknown-elf-as -g -march=rv32ec_zicsr_zmmul` with
 `-I src/board/ch32v006f8u6 -I src/mcu/ch32v006 -I src`, then
@@ -133,26 +167,42 @@ Hardware (the board is plugged in through a WCH-LinkE, attached to WSL2 with usb
                                             # talk to the REPL (Ctrl-A Ctrl-X to quit)
 
 The two maps are needed: the board ends its lines with LF only, and it ignores CR,
-so Enter (CR) must be sent as LF. `make term` runs the same picocom command. To load
-the prelude, press Ctrl-A Ctrl-S and give `prelude.f`: ascii-xfr sends one line, then
-waits 100 ms (the board does not read the UART while it processes a line; the slowest
-prelude line takes ~2 ms). It lives in RAM, so a reset loses it.
+so Enter (CR) must be sent as LF. `make term` runs the same picocom command. To send a
+Forth source file, press Ctrl-A Ctrl-S and give its name: ascii-xfr sends one line, then
+waits 100 ms (the board does not read the UART while it processes a line). What it
+defines lives in RAM, so a reset loses it unless `+log` was on.
 
 Layout:
 - `sixforths.s` (repo root) is the top-level file. It includes `board.s`, `mcu.s`, then
-  `src/01-*.s` ... `src/13-ans-primitives.s` **in that order**. The dictionary follows the
-  include order, and `.equ last_word, link` after the last include marks its end.
+  `src/01-*.s` ... `src/12-flash-log.s` **in that order**. The dictionary follows the
+  include order, and `.equ last_word, link` after the last include marks its end. It is
+  searched from the end, so words in later files are found first.
 - `src/board/ch32v006f8u6/` holds `board.s` and `linker.ld`; `src/mcu/ch32v006/` holds
   `mcu.s` (pin and register equates). Folder names are singular (`board`, `mcu`).
-- `src/13-ans-primitives.s` holds the ANS-style assembly words.
+- `src/08-primitives.s` holds every word written in machine code, sorted by function:
+  inner interpreter, data stack, return stack, memory, arithmetic, logic, comparison,
+  strings and parsing, compiler and dictionary, vocabularies, input and output, system.
+  Put a new primitive into its group. The code-field routines (`docol`, `dovar_code`,
+  `docon_code`, `dodoes_code`, `dovoc_code`) open the file.
+- `src/10-forth-words.s` holds the colon words that live in flash, as hand-written threads
+  (`defword` + `.int` lists): control flow, defining words, number output, strings, `find`,
+  `vocabulary`, `.s`, `dump`. The file's header explains how to write one. **The comment above
+  each thread is its Forth source and must stay true**: `emulators/check_threads.py` types
+  that comment into the kernel's compiler and compares the result with the thread.
+- Machine code or thread? Byte loops and stack shuffling are shorter and faster in machine
+  code (`type`: 32 bytes against 64); words that mostly call other words are shorter and
+  safer as threads.
+- `src/12-flash-log.s` holds the source log and the user flash page words.
 - `emulators/` holds `rv32emu.py` (the owner's RV32EC emulator: alignment, RV32E register
   use, FPEC sequencing and illegal instructions all fault), `harness.py` (boots
-  `../sixforths.bin` in it) and `test_fotrh.py` (the tests; it loads `../prelude.f`).
-  Tests must pass before a change is called done.
-- `prelude.f` (repo root) is everything written in Forth on top of the primitives (control
-  flow, defining words, number output, strings, `forget`, `dump`). It costs about 2.8 KB of
-  RAM dictionary. Promoting stable prelude words into flash is a planned task; `prelude.f`
-  may then move to `src/`.
+  `../sixforths.bin` in it), `test_fotrh.py` (the tests; it loads `../prelude.f`) and
+  `check_threads.py`. Tests must pass before a change is called done.
+- `prelude.f` (repo root) is the place for Forth words that are still being developed. It
+  is empty now: its 57 words moved into flash. A word tried out there (or at the console
+  with `+log`) is moved into `08-primitives.s` or `10-forth-words.s` once it is stable.
+- `etc/answers.md` holds the design decisions behind the kernel layout and the plan for the
+  phone (registers, flash, call log format, vocabularies, key input). Read it before
+  starting on a driver.
 - `docs/` holds reference PDFs (CH32V00xRM register manual, CH32V006 datasheet, pinout, the
   A7670X HAT schematic, Moving Forth parts 1-8). Read only the pages you need.
   `docs/docs-from-claude/` holds files handed over from chat; `old-docs/` looks like older
@@ -162,7 +212,8 @@ Layout:
 
 ## How to work here
 
-1. After **every** change: run `make`, then `python3 emulators/test_fotrh.py`. Report the
+1. After **every** change: run `make`, then `python3 emulators/test_fotrh.py`, and after a
+   change to `src/10-forth-words.s` also `python3 emulators/check_threads.py`. Report the
    kernel size against the 16 KiB cap and any test that fails. If a build or test
    fails, fix the cause; do not delete or loosen a test to make it pass.
 2. Add a test in `emulators/test_fotrh.py` for every new word, including edge cases (negative
@@ -175,7 +226,8 @@ Layout:
    register `s0`); start from a known state (log wiped
    or PD4 held); treat a `T<mcause> <mepc>` line as a failed test, then reset the chip
    with minichlink.
-5. Work on a feature branch (the current one is `extended-wordset`). Make small commits.
+5. Work on a feature branch (the current one is `kernel-phase1`, cut from
+   `extended-wordset`). Make small commits.
    Run `git log --oneline -20` first and match the existing commit message style.
    Never push without asking.
 6. Match the existing assembly style and comments. Where the source marks deliberate
@@ -186,11 +238,64 @@ Layout:
 
 ## Open work
 
-- `+log` works on silicon (tested 2026-11-12): FTPG appends, replay after every reset,
-  `wipe`, and the whole prelude logged across 9 pages (byte-identical to the emulator).
-  Not yet tested on the board: the log-full path. Note the log starts with `+log`, so
+Done in `kernel-phase1` (all tested in the emulator, **not yet run on the board**): HERE
+alignment, interrupt-safe PUSH, the merged primitives file, the prelude in flash,
+`s=` `scan` `/string`, the user flash page words, error recovery by the hidden flag,
+vocabularies.
+
+Still open from before:
+- The log-full path has not been tested on the board. Note the log starts with `+log`, so
   every boot turns logging on again and every typed line is saved; `-log` is not logged.
-- Add a pyserial backend to `emulators/test_fotrh.py` so the same tests run against the real
+- A pyserial backend for `emulators/test_fotrh.py`, so the same tests run against the real
   board (and against the emulator through a fake port).
-- A freeze script to turn stable prelude words into flash words.
 - Optional: `?do`.
+
+## Phase 2: the phone hardware
+
+Work this list from the top, **one item per session**, and stop after each for the owner
+to test on the board. The reasons behind each choice are in `etc/answers.md`.
+
+Rules for all of it:
+- The emulator has no USART2, DMA, timer or interrupt model. Before writing a driver, add
+  the smallest model of that device to `emulators/rv32emu.py` so the words can be tested
+  there, and say plainly which part can only be checked on the board.
+- Look every register address and bit up in `docs/ch32v006/CH32V00XRM.PDF` (only the pages
+  needed) and quote the section in a comment. Do not write a register from memory.
+- A device gets its own numbered file with its machine code and its words (`13-modem.s`,
+  `14-display.s`, ...); pin and register equates go to `mcu.s`. Keep one pin table in this
+  file once pins are assigned (the QFN20 has few: count them before promising one).
+- Interrupts: at most **one**, and it must not nest. Its routine may use only `ra`,
+  `t0-t2`, `a0-a5` (the hardware prologue saves exactly those) and must not touch `sp`,
+  `s0`, `s1`, `gp`, `tp`. The vector table in `sixforths.s` has four entries; an interrupt
+  needs it extended to its number. HPE and the vector mode are set in CSRs described in
+  `docs/ch32v006/QingKeV2_Processor_Manual.PDF` chapter 3.
+- Everything that waits (for the modem, for a key) needs a timeout. A phone must not hang.
+
+The steps:
+1. **First flash of this kernel.** Ask first (rule 3 above). The log on the board still
+   holds the old prelude: it would be compiled into RAM on top of the same words in
+   flash, so read the log back, show it, and `wipe` it with the owner's consent. Then run
+   by hand: `words`, `5 6 + .`, `: sq dup * ; 7 sq .`, `3 allot nosuchword` (must print
+   `?`, not a `T...` trap line), `vocabulary edit edit definitions : k3 70 emit ;
+   forth definitions edit k3 forth`, and a `+log` / reset / replay round trip.
+2. **`ticks` and `ms`.** A free-running counter read by polling (SysTick), no interrupt.
+   Needed for every timeout below.
+3. **Modem on USART2, received through DMA into a ring buffer in RAM.** No interrupt: the
+   main loop polls the buffer (`mkey?` `mkey` `memit`). First experiment on the board,
+   before any more code: does the DMA keep storing bytes while a flash page is erased
+   (the core stands still for about 3 ms)? If it does not, the call log must not be
+   written while the modem may talk. Consider a lower modem baud rate (`AT+IPR`).
+4. **Vectored `emit`.** One RAM cell holds the routine `emit`, `type`, `."` and `.` send
+   through: console, modem or display. Error messages and the trap beacon always use the
+   console, and `reset` selects the console again.
+5. **Tick interrupt** (about every 2 ms): refresh one LED row
+   (`docs/output/LED-matrix/Bitbang-LED-matrix.S` already keeps to the allowed registers),
+   sample the 8 keys through the 74HC165, count time. This is the one interrupt.
+6. **Key input**: chords are decoded on release (OR everything pressed since the first
+   press, report it when all keys are up). Characters are entered with two strokes through
+   a 64-byte table, `map[8 * first + second]`.
+7. **Modes**: one vocabulary per mode (idle, dial, call, edit, ...), a variable that holds
+   the current mode's vocabulary, and a handler that builds a name from the key mask
+   (`k13` for keys 1 and 3) and looks it up with `find-name-in`, then in a common
+   vocabulary. Do not switch CONTEXT from the key handler.
+8. **Call log** in the user flash, 16-byte records (format in `etc/answers.md`).

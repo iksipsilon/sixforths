@@ -18,17 +18,26 @@ Copyright (c) 2021~ Alexander Williams, https://a1w.ca
 #   t3 -> a4, t4 -> a5, t5 -> gp, t6 -> tp
 #   s3 -> eliminated (spilled to the return stack in 04-io-helpers.s)
 # gp/tp are safe targets: no C runtime, no .sdata relaxation, no threads.
+#
+# The four Forth registers: the three "s" registers and the first argument
+# register.
 # sp = DSP = data stack pointer
-# a0 = W   = working register
-# a1 = X   = working register
-# a2 = Y   = working register
-# a3 = Z   = working register
 # s0 = RSP = return stack pointer (was s2; s0 no longer reserved as FP)
 # s1 = IP  = instruction pointer
+# a0 = W   = working register (NEXT hands it to the code-field routine)
+# sp, s0 and s1 are also the registers no subroutine and no interrupt touches.
+# With IP = s1 and W = a0, every instruction of NEXT has a 2-byte form.
+#
+# Scratch inside a primitive:
+# a1 = X, a2 = Y, a3 = Z = working registers
 # a4 = scratch (was t3)
-# a5 = scratch (was t4)
+# a5 = scratch (was t4); NEXT uses it as its temporary
+# t0 = temporary of the PUSH, PUSHRSP, POPRSP and checkunderflow macros
+# t1, t2 = scratch
 # gp = scratch (was t5)
 # tp = scratch (was t6)
+# ra belongs to call / ret. An interrupt routine may use ra, t0-t2 and a0-a5
+# only: those are what the hardware prologue saves (see 02-macros.s, PUSH).
 
 # Ensure the _start entry label is defined first
 # CH32V006 PORT: a vector table at 0x0, as in WCH's startup code. Reset
