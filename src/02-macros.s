@@ -125,18 +125,6 @@ code_\label :                   # machine code follows, ending with NEXT
     j \jump             # jump when print returns
 .endm
 
-# restore HERE and LATEST variables
-.macro restorevars reg
-    # update HERE
-    li t0, var_HERE     # load HERE variable into temporary
-    sw \reg, 0(t0)      # store the address of LATEST back into HERE
-
-    # update LATEST
-    li t0, var_LATEST   # load LATEST variable into temporary
-    lw t1, 0(\reg)      # load LATEST variable value into temporary
-    sw t1, 0(t0)        # store LATEST word into LATEST variable
-.endm
-
 # check for stack underflow
 .macro checkunderflow stacktop
     li t0, DSP_TOP-\stacktop    # load address of top of stack

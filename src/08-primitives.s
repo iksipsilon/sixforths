@@ -1245,7 +1245,8 @@ defcode ";",1,F_IMMEDIATE,SEMI
 
     # bounds check on the exit memory location
     li a4, LOGBUF       # load out of bounds memory address (LOGBUF)
-    bge t2, a4, memory_error # error if the memory address is out of bounds
+    bge t2, a4, err_mem # error if the memory address is out of bounds
+                        # (reset then drops the unfinished word: abandon_def)
 
     la t1, EXIT         # load the codeword address into temporary
     sw t1, 0(t2)        # store the codeword address into HERE
@@ -1258,12 +1259,6 @@ defcode ";",1,F_IMMEDIATE,SEMI
     li t0, var_STATE    # load the address of the STATE variable into temporary
     sw zero, 0(t0)      # store the current state back into the STATE variable
     NEXT
-
-memory_error:
-    li t2, var_LATEST   # copy the memory address of LATEST into temporary
-    lw t2, 0(t2)        # load the address value into temporary
-    restorevars t2      # restore HERE and LATEST (t2)
-    j err_mem
 
 # [ ( -- )              Switch to interpret state (immediate)
 defcode "[",1,F_IMMEDIATE,LBRAC

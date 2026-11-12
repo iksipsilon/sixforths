@@ -120,11 +120,11 @@ number_error:
 # search for a word in the dictionary by name (jonesforth FIND)
 # arguments: a0 = token buffer address, a1 = token length, a2 = LATEST value
 # returns: a1 = address of the word header if found (a0 is preserved)
-# clobbers: t0, t1, t2, a2, a4, a5, gp
+# clobbers: t0, t1, a2, a4, a5, gp
 lookup:
-    mv t2, a2                   # save the LATEST value for restorevars on error
 lookup_loop:
-    beqz a2, lookup_error       # error if the address is 0 (end of the dictionary)
+    beqz a2, err_error          # not found (end of the dictionary): the error
+                                # path drops a half-built definition (abandon_def)
     lbu t0, CELL(a2)            # load the flags+length byte of this word
 
     # check if the word is hidden
@@ -151,14 +151,6 @@ lookup_cmp:
 lookup_next:
     lw a2, 0(a2)                # follow link to next word in dict
     j lookup_loop
-lookup_error:
-    # check the STATE
-    li t0, var_STATE            # load the address of the STATE variable into temporary
-    lw t0, 0(t0)                # load the current state into a temporary
-    beqz t0, err_error          # if in execute mode (STATE = 0), jump to error handler to reset
-
-    restorevars t2              # restore HERE and LATEST (t2)
-    j err_error                 # jump to error handler
 lookup_done:
     mv a1, a2                   # return the word header address in X
     ret
@@ -207,4 +199,27 @@ mkh_code:
     sw t2, 0(t1)                # LATEST = the new word
     li t0, var_HERE
     sw gp, 0(t0)                # HERE = just after the code field
+    ret
+
+# drop a half-built colon definition: called from reset, i.e. after every error.
+# CH32V006 PORT: replaces upstream's restorevars macro. That one ran only when
+# a word was not found in compile state and trusted that LATEST was the word
+# being compiled. Two consequences: an error inside [ ... ], a full dictionary
+# or an oversized token left a hidden header and its cells behind, and a typo
+# after a stray `]` removed the last finished word (or, with no RAM word yet,
+# pointed HERE into flash). A word is hidden exactly while it is being
+# compiled, so that flag decides: if the newest word is hidden, unlink it and
+# give its memory back.
+# clobbers: t0, t1, t2
+abandon_def:
+    li t0, var_LATEST
+    lw t1, 0(t0)                # the newest word
+    lbu t2, CELL(t1)            # its flags+length byte
+    andi t2, t2, F_HIDDEN
+    beqz t2, abandon_done       # finished word: nothing to drop
+    lw t2, 0(t1)                # the word before it
+    sw t2, 0(t0)                # becomes the newest again
+    li t0, var_HERE
+    sw t1, 0(t0)                # HERE moves back to the dropped header
+abandon_done:
     ret

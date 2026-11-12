@@ -118,6 +118,21 @@ t("unloop exit", ": ul 10 0 do i 3 = if unloop exit then i . loop ; ul", "0 1 2 
 t("recurse", ": fact dup 1 > if dup 1- recurse * then ; 5 fact .", "120 ")
 t("[ ] literal", ": ten [ 5 5 + ] literal ; ten .", "10 ")
 
+# ---- errors inside a definition: it is dropped, nothing else is ----
+def here_after(src):
+    e, out, _ = h.session(P, "here @ .\n" + src + "\nhere @ .\n")
+    nums = [l.split()[0] for l in out.split("\n") if l.strip().endswith("ok") and l.split()[0].isdigit()]
+    return e, out, nums
+for name, src in (("an unknown word", ": bad 1 2 nosuchword"), ("an error between [ and ]", ": bad 1 [ 5 nosuchword"),
+                  ("an oversized token", ": bad 1 " + "x" * 40), ("stack underflow in [ ]", ": bad [ drop")):
+    e, out, nums = here_after(src)
+    check(f"definition dropped after {name}", e, out + f" same={len(nums) == 2 and nums[0] == nums[1]}", ["  ?", "same=True"], absent=())
+    e, out, _ = h.session(P, src + "\nbad\n")
+    check(f"... and its name is gone ({name})", e, out + f" errors={out.count('  ?')}", ["errors=2"], absent=())
+t("a stray ] and a typo leave the last word alone", ": keep 5 ; ] nosuchword\nkeep .", "  ?", "keep .\n5 ", absent=())
+e, out, _ = h.session(B0, "] nosuchword\n: sq dup * ; 7 sq 16 + emit\n")
+check("... also when no RAM word exists yet", e, out, ["emit\nA"], absent=())
+
 # ---- defining words ----
 t("variable", "variable x 7 x ! x @ .", "7 ")
 t("constant", "100 constant hundred hundred .", "100 ")

@@ -95,6 +95,9 @@ reset_replay_done:
     li t0, var_STATE    # load STATE variable
     sw zero, 0(t0)      # initialize STATE variable (0 = execute)
 
+    # CH32V006 PORT: an error may have interrupted a colon definition
+    call abandon_def    # drop it (a no-op on the first pass and after `;`)
+
 .balign CELL
 # reset the RAM from the last defined word
 ram_init:
