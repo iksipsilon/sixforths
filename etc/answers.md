@@ -56,7 +56,7 @@ RAM is the scarce resource, not flash.
 
 | Flash | Size | Use |
 |---|---|---|
-| 0x0000-0x3FFF | 16 KiB | kernel (12,268 bytes used) |
+| 0x0000-0x3FFF | 16 KiB | kernel (13,596 bytes used, 2026-11-12) |
 | 0x4000-0x67FF | 10 KiB | source-replay log |
 | 0x6800-0xF7FF | 36 KiB | user flash: application data |
 
@@ -187,7 +187,7 @@ Plan for the phone:
 
 ## 6. Primitives
 
-The kernel has 171 words: 132 in machine code, 39 as threads.
+The kernel has 182 words (2026-11-12): 143 in machine code, 39 as threads.
 
 Changed in this branch:
 - 15 prelude words became machine code, among them `type count space cr c, align move
@@ -197,8 +197,9 @@ Changed in this branch:
 - Dropped: `nand`, `um+` (nothing used them).
 - `forget` is machine code now.
 
-Still to add, with their drivers (phase 2 in `CLAUDE.md`): `ticks`, `ms`, the modem
-words `mkey?` `mkey` `memit`, vectored `emit`, the display and key words.
+Added since, with their drivers (phase 2 in `CLAUDE.md`): `ticks` `ms` `irqs`, the modem
+words `mkey?` `mkey` `memit` `mtimeout`, and the I/O vectors `>console` `>modem`
+`<console` `<modem`. Still to add: the display and key words.
 
 Names follow the Forth-2012 glossary where a word exists there. Full compliance is not a
 goal.
@@ -224,7 +225,7 @@ One of each and no more:
 
 ## 9. Not checked by anyone yet
 
-- The whole branch on the real chip: phase 2 steps 1 and 2 passed there on 2026-11-12
+- The whole branch on the real chip: phase 2 steps 1 to 5a passed there on 2026-11-12
   (`CLAUDE.md`); `fpage-prog` and the log-full path have not run there yet.
 - ~~Whether the DMA keeps storing bytes while a flash page is erased.~~ It does (checked
   2026-11-12 with USART1 and DMA channel 5, see phase 2 step 3 in `CLAUDE.md`), so the

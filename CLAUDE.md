@@ -214,6 +214,7 @@ Layout:
 - `prelude.f` (repo root) is the place for Forth words that are still being developed. It
   is empty now: its 57 words moved into flash. A word tried out there (or at the console
   with `+log`) is moved into `08-primitives.s` or `10-forth-words.s` once it is stable.
+- `etc/board.py` talks to the board over the UART for hardware tests (see Phase 2).
 - `etc/answers.md` holds the design decisions behind the kernel layout and the plan for the
   phone (registers, flash, call log format, vocabularies, key input). Read it before
   starting on a driver.
@@ -268,6 +269,22 @@ Still open from before:
 - Optional: `?do`.
 
 ## Phase 2: the phone hardware
+
+**Where we stopped (2026-11-12): waiting for the display and key hardware**, which may
+take more than a month.
+- The board runs commit `a042149` (step 5a, 13,596 bytes). Its source log is empty, so
+  logging is off at boot, and the user flash is empty. A wire joins D2 and D3 (the USART2
+  loopback; D2 is driven as an output at every boot) and the board's USB-C socket is
+  unplugged. Nothing else is connected.
+- Next: 5b (the LED rows in the tick) once the matrix is wired, then 5c (the keys). Ask
+  the owner how it is wired before writing code, and check it against the pin table.
+- Before trusting any of this after the pause: `make`, run the tests, and read the
+  board's flash back (`minichlink -r <file> 0x08000000 0xF800`, read only) to see what
+  it really holds. WSL may need the WCH-LinkE attached again (`usbipd attach --wsl
+  --busid <id>` on Windows; `usbipd list` shows the id).
+- `etc/board.py` sends Forth lines to the board and waits for each echo and `ok` (its
+  docstring has the commands); `etc/flash-before-fable.bin` is the board's flash from
+  before this kernel.
 
 Work this list from the top, **one item per session**, and stop after each for the owner
 to test on the board. The reasons behind each choice are in `etc/answers.md`.
