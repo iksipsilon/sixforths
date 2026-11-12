@@ -14,6 +14,13 @@
 .equ TIB_TOP, RSP_TOP - STACK_SIZE      # address of top of terminal buffer
 .equ TIB_BOTTOM, TIB_TOP - STACK_SIZE   # address of bottom of terminal buffer
 
+# CH32V006 PORT: room kept free under the data stack for one interrupt frame.
+# With the hardware prologue (HPE) on, the QingKe V2 saves ra, t0-t2 and
+# a0-a5 at sp when an interrupt is taken: 48 bytes (processor manual 3.4).
+# The data stack therefore holds (STACK_SIZE - IRQ_FRAME) / CELL = 52 cells.
+# One frame only: interrupts must not nest.
+.equ IRQ_FRAME, 48
+
 # variables
 .equ var_STATE, TIB_BOTTOM - CELL       # 1 CELL for STATE variable
 .equ var_TOIN, var_STATE - CELL         # 1 CELL for TOIN variable (looks into TIB)

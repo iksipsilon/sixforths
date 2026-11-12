@@ -23,9 +23,11 @@ defcode "!",1,,STORE
     addi sp, sp, 2*CELL # move DSP up by 2 cells
     NEXT
 
-# sp@ ( -- addr )       Get current data stack pointer
+# sp@ ( -- addr )       Get current data stack pointer (the address of the
+# top cell before sp@ pushed its result)
 defcode "sp@",3,,DSPFETCH
-    PUSH sp             # store DSP in the top of the stack
+    mv t1, sp           # PUSH moves the DSP before it stores
+    PUSH t1             # store DSP in the top of the stack
     NEXT
 
 # rp@ ( -- addr )       Get current return stack pointer

@@ -17,12 +17,19 @@
 .endm
 
 # push register to top of stack and move DSP
+# CH32V006 PORT: the DSP moves first, then the store. sp is the data stack,
+# and the QingKe V2 stacks its interrupt frame at sp (hardware prologue, 48
+# bytes, processor manual 3.4): a cell stored below sp before sp moved could
+# be overwritten by an interrupt arriving between the two instructions.
+# IRQ_FRAME bytes stay free under the deepest cell for that frame. (The new
+# order is also 2 bytes shorter: a negative offset cannot be compressed.)
+# Do not PUSH sp itself: copy it to a register first (see sp@).
 .macro PUSH reg
-    li t0, RSP_TOP+CELL         # load address of bottom of stack + 1 CELL
+    li t0, RSP_TOP+CELL+IRQ_FRAME   # lowest DSP that still has room for a cell
     blt sp, t0, err_overflow    # jump to error handler if stack overflow
 
-    sw \reg, -CELL(sp)  # store the value in the register to the top of the DSP
     addi sp, sp, -CELL  # move the DSP down by 1 cell
+    sw \reg, 0(sp)      # store the value in the register to the top of the DSP
 .endm
 
 # push register to return stack
@@ -30,8 +37,8 @@
     li t0, TIB_TOP+CELL         # load address of bottom of stack + 1 CELL
     blt s0, t0, err_overflow    # jump to error handler if stack overflow
 
-    sw \reg, -CELL(s0)  # store value from register into RSP
     addi s0, s0, -CELL  # decrement RSP by 1 cell
+    sw \reg, 0(s0)      # store value from register into RSP
 .endm
 
 # pop top of return stack to register

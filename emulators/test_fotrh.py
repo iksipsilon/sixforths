@@ -88,6 +88,11 @@ t("?dup", "5 ?dup . . 0 ?dup .", "5 5 0 ")
 t("+!", "variable v 5 v ! 3 v +! v @ .", "8 ")
 t("depth and .s", "1 2 3 depth . .s", "3 1 2 3 ")
 
+# 50 loop results plus the two loop parameters of the second loop = 52 cells
+t("52 cells fit on the data stack", ": f52 50 0 do i loop 50 0 do drop loop 65 emit ; f52", "f52\nA")
+t("the 53rd overflows", ": f53 51 0 do i loop 51 0 do drop loop 65 emit ; f53", "? stack overflow", absent=("f53\nA",))
+t("sp@", "7 sp@ @ .", "7 ")
+
 # ---- memory ----
 t("cmove fill", "65 pad c! 66 pad 1+ c! pad pad 8 + 2 cmove pad 8 + c@ . pad 9 + c@ . pad 4 88 fill pad 3 + c@ .", "65 66 88 ")
 t("move overlap (dst>src)", "65 pad c! 66 pad 1+ c! 67 pad 2 + c! pad pad 1+ 3 move pad 1+ c@ . pad 3 + c@ .", "65 67 ")
