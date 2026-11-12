@@ -285,15 +285,16 @@ The steps:
    matched the emulator byte for byte, and the board's log is wiped again. Learned:
    `minichlink -w` rewrites only the pages it writes, so **the log survives a kernel
    reflash** and replays on the new kernel's first boot (send `wipe` as the first line, or
-   hold PD4, when the old log does not suit the new kernel). The first minichlink
-   connection after a `wipe` printed `link error, nothing connected to linker` five times
-   (2 of 2), then worked and read correctly; cause unknown.
+   hold PD4, when the old log does not suit the new kernel). minichlink sometimes prints
+   `link error, nothing connected to linker` five times when it connects (3 of 7
+   connections, with and without a `wipe` before), then recovers and works; cause unknown.
 2. **`ticks` and `ms`.** A free-running counter read by polling (SysTick), no interrupt.
    Needed for every timeout below.
-   **Done in the emulator 2026-11-12, not yet on the board.** `ticks ( -- u )` is the
-   SysTick count on HCLK/8: 3000 per ms (`STK_TICKS_PER_MS`), wrapping every 23.9 min;
-   `ticks t0 -` is the time since t0. `ms ( n -- )` treats n as signed (n <= 0 returns at
-   once). On the board: time `5000 ms` from the PC (5.0 s expected).
+   **Done 2026-11-12, checked on the board.** `ticks ( -- u )` is the SysTick count on
+   HCLK/8: 3000 per ms (`STK_TICKS_PER_MS`), wrapping every 23.9 min; `ticks t0 -` is the
+   time since t0. `ms ( n -- )` treats n as signed (n <= 0 returns at once). On the board,
+   `5000 ms` took 4.97-4.99 s by the PC's clock (the HSI runs 0.2-0.6% fast), writing
+   STK_CNTL works, and after `reboot` the count starts again from 0.
 3. **Modem on USART2, received through DMA into a ring buffer in RAM.** No interrupt: the
    main loop polls the buffer (`mkey?` `mkey` `memit`). First experiment on the board,
    before any more code: does the DMA keep storing bytes while a flash page is erased
