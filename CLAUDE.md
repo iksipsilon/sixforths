@@ -248,8 +248,8 @@ Layout:
 Done in `kernel-phase1` (all tested in the emulator; flashed on 2026-11-12, and the Phase 2
 step 1 checks passed on the board): HERE alignment, interrupt-safe PUSH, the merged
 primitives file, the prelude in flash, `s=` `scan` `/string`, the user flash page words,
-error recovery by the hidden flag, vocabularies. Not yet run on the board: `fpage-erase` /
-`fpage-prog`.
+error recovery by the hidden flag, vocabularies. `fpage-erase` ran on the board in the step 3
+experiment; `fpage-prog` has not run there yet.
 
 Still open from before:
 - The log-full path has not been tested on the board. Note the log starts with `+log`, so
@@ -327,11 +327,14 @@ The steps:
    USART2 can only be TX = PD2, RX = PD3 on the QFN20 (`AFIO_PCFR1` USART2_RM = 011; the
    other remaps need pins it lacks, or SWIO); its clock is `RCC_PB2PCENR` bit 13, its RX
    is DMA channel 7 (RM Table 8-2).
-   **Driver done in the emulator 2026-11-12, not yet on the board:** `mkey? ( -- flag )`,
+   **Driver done 2026-11-12, checked on the board with a wire from D2 to D3:** `mkey? ( -- flag )`,
    `mkey ( -- c | -1 )` (waits at most `mtimeout` ms, 1000 at boot; -1 if nothing came),
    `memit ( c -- )`, `mtimeout ( -- addr )`. A 256-byte ring; a reader that falls a whole
-   ring behind loses bytes without an error. Board test: a wire from PD2 to PD3, then
-   `65 memit mkey .` must print 65. Found on the way: the interpreter compiled into a
+   ring behind loses bytes without an error. On the board `65 memit mkey .` printed 65, a
+   1000 ms `mkey` timeout took 3,000,926 ticks, 300 bytes went round the ring with no error,
+   an unread 300-byte burst left the last 44 (as in the emulator), unread bytes survived an
+   error, and neither `reboot` nor a hardware reset left a junk byte. Not yet: the A7670E
+   itself (read the HAT schematic in `docs/A7670X` for its UART voltage first). Found on the way: the interpreter compiled into a
    definition with no bounds check, and `;` unhid before its check (fixed, `b13ad53`).
 4. **Vectored `emit` and `key`.** One RAM cell holds the routine `emit`, `type`, `."` and
    `.` send through (console, modem or display), another the one `key` and `key?` read from
