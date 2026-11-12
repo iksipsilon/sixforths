@@ -307,9 +307,20 @@ The steps:
    USART2 can only be TX = PD2, RX = PD3 on the QFN20 (`AFIO_PCFR1` USART2_RM = 011; the
    other remaps need pins it lacks, or SWIO); its clock is `RCC_PB2PCENR` bit 13, its RX
    is DMA channel 7 (RM Table 8-2).
-4. **Vectored `emit`.** One RAM cell holds the routine `emit`, `type`, `."` and `.` send
-   through: console, modem or display. Error messages and the trap beacon always use the
-   console, and `reset` selects the console again.
+4. **Vectored `emit` and `key`.** One RAM cell holds the routine `emit`, `type`, `."` and
+   `.` send through (console, modem or display), another the one `key` and `key?` read from
+   (console, `mkey`, or the keypad's characters from step 6). `mkey?` `mkey` `memit` stay as
+   words of their own: the phone's main loop polls the console, the modem and the keys side
+   by side.
+   **Errors must work without a console.** On the finished phone nothing is connected to
+   USART1, so an error must not fall back to the console REPL (the owner, 2026-11-12).
+   `reset` restarts the word held in a RAM cell instead: the REPL by default (developing,
+   with a PC attached), or the phone's main loop, which puts itself there when it starts
+   (from the last line of the log). That word sets the vectors it needs and shows the
+   error: the REPL on the console as now, the phone on the LED matrix (for example `?` and
+   the word's name), cleared with a key. A trap still sends `T<mcause> <mepc>` to the
+   console; on the phone it then resets the chip (later through the watchdog) instead of
+   hanging. A REPL on the matrix and the 8 keys is possible later, but slow.
 5. **Tick interrupt** (about every 2 ms): refresh one LED row
    (`docs/output/LED-matrix/Bitbang-LED-matrix.S` already keeps to the allowed registers),
    sample the 8 keys through the 74HC165, count time. This is the one interrupt.
