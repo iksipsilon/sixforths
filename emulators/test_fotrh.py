@@ -172,6 +172,43 @@ t("find", 'create nm 3 c, 100 c, 117 c, 112 c, nm find . drop', "-1 ")
 t("find miss", 'create nm 3 c, 122 c, 122 c, 122 c, nm find . drop', "0 ")
 t("forget", ": ff1 1 ; : ff2 2 ; forget ff2 ff1 . ff2", "1 ", absent=())
 
+# ---- vocabularies ----
+VOC = "vocabulary edit\nedit definitions : k3 70 emit ; forth definitions\n: k3 71 emit ;\n"
+t("the same name in two vocabularies", VOC + "k3\nedit k3 forth\nk3", "\nk3\nG", "edit k3 forth\nF", absent=("  ?",))
+t("a miss falls through to FORTH", VOC + "edit 65 emit forth", "forth\nA")
+out = t("words lists the context vocabulary only", "vocabulary edit edit definitions : k3 ; : k4 ; forth definitions\nedit words forth", "forth\n k4 k3   ok")
+t("find-name-in", VOC + "' edit >body constant ev\n: t1 s\" k3\" ev find-name-in >cfa execute ; t1\n: t2 s\" dup\" ev find-name-in . ; t2",
+  "t1\nF", "t2\n0 ")
+t("find-name follows the search order", VOC + ': t3 s" k4" find-name 0= . ; edit definitions : k4 ; forth definitions\nt3 edit t3 forth', "-1 0 ")
+t("an error goes back to FORTH", "vocabulary edit edit definitions\nnosuchword\n: q5 5 ; q5 . edit q5", "5 ", absent=())
+out = t("... and the new word went to FORTH", "vocabulary edit edit definitions\nnosuchword\n: q5 5 ;\nedit words", "words\n   ok", absent=())
+t("an error with an empty vocabulary current", "vocabulary e2 e2 definitions nosuchword\n65 emit", "  ?", "emit\nA", absent=())
+t("a failed definition in a vocabulary is dropped", "vocabulary edit edit definitions : ok1 1 ; : bad 2 nosuchword\nedit ok1 . bad", "ok1 . bad\n1   ?", absent=())
+t("recurse in a vocabulary", "vocabulary edit edit definitions : fact dup 1 > if dup 1- recurse * then ; forth definitions edit 5 fact . forth", "120 ")
+t("defining words in a vocabulary", "vocabulary edit edit definitions 42 constant kk variable vv 7 vv ! : im 65 emit ; immediate forth definitions\nedit kk . vv @ . : x im ; forth",
+  "42 7 A")
+t("latest in FORTH", "latest @ 4 + c@ 31 and . : zz ; latest @ 4 + c@ 31 and .", "2 ")
+FG = ("vocabulary edit\n: a1 1 ;\nedit definitions : k4 4 ; forth definitions\n: b1 2 ;\n"
+      "edit definitions : k5 5 ; forth definitions\nedit forget k4 forth\n")
+t("forget trims every vocabulary", FG + "a1 . edit a1 . forth : c1 3 ; c1 .", "1 1 3 ")
+for w in ("b1", "edit k4", "edit k5"):
+    t(f"... {w} is gone", FG + w + " 66 emit", "  ?", absent=("B",))
+e, out, _ = h.session(P, "here @ .\n" + FG + "here @ .\n")
+nums = [l.split()[0] for l in out.split("\n") if l.strip().endswith("ok") and l.split()[0].isdigit()]
+check("... and HERE is back at k4", e, f"{int(nums[1]) - int(nums[0])}", ["52"])   # edit (28 bytes) + a1 (24 bytes) remain
+FV = "vocabulary v2\nv2 definitions : x1 1 ;\nforget v2\n"
+t("forget a vocabulary while it is current", FV + ": y1 7 ; y1 . voc-link @ . words", "7 0 ", " y1 ", " dup ")
+t("... its name is gone", FV + "v2", "  ?", absent=())
+t("forget keeps older vocabularies", "vocabulary v1 v1 definitions : p1 11 ; forth definitions vocabulary v2\nforget v2\nv1 p1 . forth voc-link @ ' v1 >body 4 + = .", "11 -1 ")
+t("... but not what was added to them later", "vocabulary v1 vocabulary v2 v1 definitions : p1 11 ; forth definitions\nforget v2\nv1 p1", "  ?", absent=())
+t("forget refuses a word of an unselected vocabulary", VOC + "vocabulary e3 e3 definitions : only 1 ; forth definitions\nforget only", "  ?", absent=())
+# vocabularies survive the source log
+e = copy.deepcopy(B0)
+h.feed(e, "+log\n" + VOC)
+r = h.boot(flash=bytes(e.f))
+out, _ = h.feed(r, "k3 edit k3 forth k3\n")
+check("vocabularies come back with the log", r, out, ["forth k3\nGFG"])
+
 # ---- numbers and debugging ----
 t("print limits", "2147483647 . -2147483648 . 0 .", "2147483647 -2147483648 0 ")
 t("hex", "hex 255 u. -1 u. decimal 255 .", "FF FFFFFFFF 255 ")

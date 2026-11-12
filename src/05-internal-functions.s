@@ -117,50 +117,83 @@ number_error:
     li a1, 1                    # number is too large or not an integer, return 1
     ret
 
-# search for a word in the dictionary by name (jonesforth FIND)
-# arguments: a0 = token buffer address, a1 = token length, a2 = LATEST value
-# returns: a1 = address of the word header if found (a0 is preserved)
-# clobbers: t0, t1, a2, a4, a5, gp
-lookup:
-lookup_loop:
-    beqz a2, err_error          # not found (end of the dictionary): the error
-                                # path drops a half-built definition (abandon_def)
+# search one vocabulary by name (jonesforth FIND)
+# arguments: a0 = name address, a1 = name length, a2 = header of the newest
+#            word of the vocabulary (0 = it is empty)
+# returns: a2 = address of the word header, or 0 if the name is not there
+#          (a0 and a1 are preserved)
+# clobbers: t0, t1, a4, a5, gp
+search_chain:
+    beqz a2, search_done        # end of the chain (link 0): not found
     lbu t0, CELL(a2)            # load the flags+length byte of this word
 
     # check if the word is hidden
     andi t1, t0, F_HIDDEN       # read the hidden flag bit
-    bnez t1, lookup_next        # skip the word if it's hidden
+    bnez t1, search_next        # skip the word if it's hidden
 
     # compare the lengths first (cheap reject)
     andi t0, t0, F_LENMASK      # keep only the name length
-    bne t0, a1, lookup_next     # skip the word if the lengths differ
+    bne t0, a1, search_next     # skip the word if the lengths differ
 
     # compare the name bytes
     addi a4, a2, CELL+1         # a4 = name pointer in the header
     mv a5, a0                   # a5 = token pointer (a0 itself is preserved)
     mv t1, t0                   # t1 = byte counter (length, always > 0)
-lookup_cmp:
-    beqz t1, lookup_done        # all bytes matched: found it
+search_cmp:
+    beqz t1, search_done        # all bytes matched: found it
     lbu t0, 0(a4)               # load one name byte
     lbu gp, 0(a5)               # load one token byte
-    bne t0, gp, lookup_next     # mismatch: try the previous word
+    bne t0, gp, search_next     # mismatch: try the previous word
     addi a4, a4, 1              # advance the name pointer
     addi a5, a5, 1              # advance the token pointer
     addi t1, t1, -1             # one byte down
-    j lookup_cmp
-lookup_next:
+    j search_cmp
+search_next:
     lw a2, 0(a2)                # follow link to next word in dict
-    j lookup_loop
-lookup_done:
-    mv a1, a2                   # return the word header address in X
+    j search_chain
+search_done:
     ret
+
+# search the way the text interpreter does: the CONTEXT vocabulary first, then
+# FORTH (CH32V006 PORT: vocabularies, see the words in 08-primitives.s). A
+# vocabulary is known by the address of its head cell, the cell that holds the
+# header of its newest word; FORTH's head cell is var_LATEST.
+# arguments: a0 = name address, a1 = name length
+# returns: a2 = address of the word header, or 0 (a0 and a1 are preserved)
+# clobbers: t0, t1, t2, a3, a4, a5, gp
+search_order:
+    mv t2, ra                   # search_chain is called below
+    li a3, var_CONTEXT
+    lw a3, 0(a3)                # a3 = head cell of the context vocabulary
+    lw a2, 0(a3)
+    call search_chain
+    bnez a2, search_order_done  # found in the context vocabulary
+    li t0, var_LATEST
+    beq a3, t0, search_order_done # the context is FORTH: already searched
+    lw a2, 0(t0)
+    call search_chain
+search_order_done:
+    jr t2
+
+# find a word for the interpreter, or fail
+# arguments: a0 = token buffer address, a1 = token length
+# returns: a1 = address of the word header (a0 is preserved). A word that is
+# not found ends in the error handler, which also drops a half-built
+# definition (abandon_def).
+# clobbers: t0, t1, t2, a2, a3, a4, a5, gp, tp
+lookup:
+    mv tp, ra                   # search_order is called below
+    call search_order
+    beqz a2, err_error          # not found
+    mv a1, a2                   # return the word header address in X
+    jr tp
 
 .balign CELL
 # make_header: build a dictionary header at HERE
 # arguments: a0 = name address, a1 = name length (1..31), a2 = code field
 #            value, a3 = initial flags (0, or F_HIDDEN)
 # leaves HERE just after the code field and LATEST pointing at the new word.
-# Same layout and bounds check as ':' in 08-forth-primitives.s.
+# Same layout and bounds check as ':' in 08-primitives.s.
 # HERE is rounded up to a CELL boundary first, so a header can follow `c,`.
 # clobbers: t0, t1, t2, a0, a4, a5, gp, tp
 make_header:
@@ -174,9 +207,10 @@ make_header:
     addi gp, a5, CELL           # gp = new HERE
     li tp, LOGBUF-CELL          # keep one spare cell: CREATE reserves it for DOES>
     bge gp, tp, err_mem         # dictionary full
-    li t1, var_LATEST
+    li t1, var_CURRENT
+    lw t1, 0(t1)                # head cell of the vocabulary definitions go to
     lw a4, 0(t1)
-    sw a4, 0(t2)                # link field = previous LATEST
+    sw a4, 0(t2)                # link field = its newest word so far
     or a4, a1, a3               # flags + length byte
     sb a4, CELL(t2)
     addi a4, t2, CELL+1         # a4 = name destination
@@ -195,8 +229,9 @@ mkh_pad:
     j mkh_pad
 mkh_code:
     sw a2, 0(a5)                # code field
-    li t1, var_LATEST
-    sw t2, 0(t1)                # LATEST = the new word
+    li t1, var_CURRENT
+    lw t1, 0(t1)
+    sw t2, 0(t1)                # the new word is the newest of that vocabulary
     li t0, var_HERE
     sw gp, 0(t0)                # HERE = just after the code field
     ret
@@ -212,8 +247,10 @@ mkh_code:
 # give its memory back.
 # clobbers: t0, t1, t2
 abandon_def:
-    li t0, var_LATEST
-    lw t1, 0(t0)                # the newest word
+    li t0, var_CURRENT
+    lw t0, 0(t0)                # head cell of the vocabulary definitions go to
+    lw t1, 0(t0)                # its newest word
+    beqz t1, abandon_done       # an empty vocabulary
     lbu t2, CELL(t1)            # its flags+length byte
     andi t2, t2, F_HIDDEN
     beqz t2, abandon_done       # finished word: nothing to drop

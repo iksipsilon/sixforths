@@ -40,6 +40,13 @@ boot_arm:
     li t1, var_LATEST   # load LATEST variable
     sw t0, 0(t1)        # initialize LATEST variable to contain last_word memory address
 
+    # CH32V006 PORT: one vocabulary to begin with, FORTH, whose head cell is
+    # the LATEST variable (reset: points CONTEXT and CURRENT back at it)
+    li t0, var_CURRENT
+    sw t1, 0(t0)        # definitions go to FORTH (t1 = var_LATEST)
+    li t0, var_VOCLINK
+    sw zero, 0(t0)      # no other vocabulary exists yet
+
     # CH32V006 PORT: numbers print in decimal until `hex` says otherwise
     li t0, 10
     li t1, var_BASE
@@ -97,6 +104,15 @@ reset_replay_done:
 
     # CH32V006 PORT: an error may have interrupted a colon definition
     call abandon_def    # drop it (a no-op on the first pass and after `;`)
+
+    # CH32V006 PORT: after an error (and at boot) the search order and the
+    # definitions are back in FORTH, as in fig-Forth's ABORT. An error in the
+    # middle of `edit definitions ...` must not leave later words in edit.
+    li t0, var_LATEST
+    li t1, var_CONTEXT
+    sw t0, 0(t1)
+    li t1, var_CURRENT
+    sw t0, 0(t1)
 
 .balign CELL
 # reset the RAM from the last defined word

@@ -204,15 +204,13 @@ defword "find",4,,FIND
 3:  .int LIT, 0
 4:  .int EXIT
 
-# : forget parse-name find-name ?dup 0= if abort then
-#     dup 0x20000000 u< if abort then dup @ latest ! here ! ;
-# Words in flash (below RAM_BASE) cannot be forgotten.
-defword "forget",6,,FORGET
-    .int PARSENAME, FINDNAME, QDUP, ZEQU, ZBRANCH, 1f
-    .int ABORT
-1:  .int DUP, LIT, RAM_BASE, ULESS, ZBRANCH, 2f
-    .int ABORT
-2:  .int DUP, FETCH, LATEST, STORE, HERE, STORE, EXIT
+# : vocabulary create 0 , here @ voc-link @ , voc-link ! dovoc latest @ >cfa ! ;
+# A vocabulary's data: its head cell (0: empty), then the link to the
+# vocabulary made before it. Its code field is dovoc_code.
+defword "vocabulary",10,,VOCABULARY
+    .int CREATE, LIT, 0, COMMA
+    .int HERE, FETCH, VOCLINK, FETCH, COMMA, VOCLINK, STORE
+    .int DOVOCW, LATEST, FETCH, TCFA, STORE, EXIT
 
 ##
 # Debugging

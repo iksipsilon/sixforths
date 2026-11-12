@@ -135,9 +135,8 @@ process_token:
     mv a1, tp               # restore a1
 
     # CH32V006 PORT: look the token up by name (a0 = address, a1 = length)
-    li a2, var_LATEST       # load LATEST variable into Y working register
-    lw a2, 0(a2)            # load LATEST value into Y working register
-    call lookup             # search the dictionary; a1 = word header address
+    call lookup             # search the context vocabulary, then FORTH;
+                            # a1 = word header address
 
     # check if the word is immediate
     lbu t0, CELL(a1)        # load the flags+length byte of the found word

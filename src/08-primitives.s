@@ -68,6 +68,15 @@ dodoes_code:
     PUSH t1
     NEXT
 
+.balign CELL
+# dovoc_code: code-field action of a vocabulary (fig-Forth's DOVOC): executing
+# the vocabulary's name makes it the CONTEXT, the one searched first.
+dovoc_code:
+    addi t1, a0, 2*CELL         # its head cell = the first data cell
+    li t2, var_CONTEXT
+    sw t1, 0(t2)
+    NEXT
+
 ##
 # Inner interpreter: the words a thread is made of, and the code-field values
 ##
@@ -214,7 +223,8 @@ defcode "docol",5,,DOCOLW
 # returns from the defining word (the thread after it must not run now).
 #   : does> ' xdoes , ; immediate
 defcode "xdoes",5,,XDOES
-    li a0, var_LATEST
+    li a0, var_CURRENT
+    lw a0, 0(a0)
     lw a0, 0(a0)                # header of the word CREATE just made
     call to_cfa                 # a0 = its code field (clobbers t0)
     la t1, dodoes_code
@@ -1032,7 +1042,8 @@ numw_push:
     PUSH a1
     NEXT
 
-# find-name ( addr len -- header | 0 )   Dictionary search. Unlike the
+# find-name ( addr len -- header | 0 )   Dictionary search in the same order
+# as the interpreter: the context vocabulary, then FORTH. Unlike the
 # interpreter's own lookup, a miss returns 0 instead of aborting. Hidden words
 # are skipped. The result is a header address: feed it to >cfa for the xt, or
 # read the flags with  4 + c@  (bit 7 = immediate).
@@ -1040,32 +1051,23 @@ defcode "find-name",9,,FINDNAME
     checkunderflow CELL
     POP a1                      # length
     POP a0                      # name address
-    li t2, var_LATEST
-    lw t2, 0(t2)                # t2 = cursor in the dictionary chain
-fn_loop:
-    beqz t2, fn_found           # end of chain: t2 = 0 is the "not found" answer
-    lbu t0, CELL(t2)            # flags + length
-    andi t1, t0, F_HIDDEN
-    bnez t1, fn_next
-    andi t0, t0, F_LENMASK
-    bne t0, a1, fn_next
-    addi a4, t2, CELL+1         # name in the header
-    mv a5, a0                   # name being looked up
-    mv t1, t0                   # compare t0 bytes
-fn_cmp:
-    beqz t1, fn_found
-    lbu t0, 0(a4)
-    lbu a3, 0(a5)
-    bne t0, a3, fn_next
-    addi a4, a4, 1
-    addi a5, a5, 1
-    addi t1, t1, -1
-    j fn_cmp
-fn_next:
-    lw t2, 0(t2)
-    j fn_loop
-fn_found:
-    PUSH t2
+    call search_order           # a2 = header or 0
+    PUSH a2
+    NEXT
+
+# find-name-in ( addr len voc -- header | 0 )   Search one vocabulary only (no
+# fall-through to FORTH). voc is the address of its head cell:  ' name >body
+# for a vocabulary made with `vocabulary`,  context @  for the current one.
+# This is the word for looking a key binding up in the phone's current mode
+# without touching CONTEXT, which belongs to the text interpreter.
+defcode "find-name-in",12,,FINDNAMEIN
+    checkunderflow 2*CELL
+    POP a2                      # head cell of the vocabulary
+    POP a1                      # length
+    POP a0                      # name address
+    lw a2, 0(a2)                # its newest word
+    call search_chain           # a2 = header or 0
+    PUSH a2
     NEXT
 
 # count ( a -- a+1 u )  Split a counted string into its text and its length
@@ -1182,9 +1184,10 @@ defcode ":",1,,COLON
     li tp, LOGBUF       # load out of bounds memory address (LOGBUF)
     bge gp, tp, err_mem # error if the memory address is out of bounds
 
-    # link field: address of the previous word
-    li t1, var_LATEST
-    lw a4, 0(t1)        # load the address of the previous word (LATEST)
+    # link field: address of the previous word of the CURRENT vocabulary
+    li t1, var_CURRENT
+    lw t1, 0(t1)        # head cell of the vocabulary definitions go to
+    lw a4, 0(t1)        # load the address of its newest word
     sw a4, 0(t2)        # store it in the link field
 
     # flags+length byte: hide the word while it is being compiled
@@ -1216,9 +1219,10 @@ colon_code:
     la a2, docol        # load the codeword address into Y working register
     sw a2, 0(a5)        # store the codeword address into the code field
 
-    # update LATEST variable
-    li t1, var_LATEST
-    sw t2, 0(t1)        # store the new word address into the LATEST variable
+    # the new word becomes the newest of the CURRENT vocabulary
+    li t1, var_CURRENT
+    lw t1, 0(t1)
+    sw t2, 0(t1)        # store the new word address into its head cell
 
     # update HERE variable
     li t0, var_HERE
@@ -1233,8 +1237,9 @@ colon_code:
 # ; ( -- )              # End the definition of a new word
 defcode ";",1,F_IMMEDIATE,SEMI
     # unhide the word
-    li t0, var_LATEST   # copy the memory address of LATEST into temporary
-    lw t0, 0(t0)        # load the address value into temporary
+    li t0, var_CURRENT  # the word being compiled is the newest of CURRENT
+    lw t0, 0(t0)        # load the address of the head cell
+    lw t0, 0(t0)        # load the address of the word
     lbu t1, CELL(t0)    # load the flags+length byte into temporary
     andi t1, t1, ~F_HIDDEN # unhide the word
     sb t1, CELL(t0)     # write the flags+length byte back to memory
@@ -1273,6 +1278,12 @@ defcode "]",1,,RBRAC
     sw t2, 0(t1)
     NEXT
 
+# dovoc ( -- code )     The code-field value that makes a word a vocabulary
+defcode "dovoc",5,,DOVOCW
+    la t1, dovoc_code
+    PUSH t1
+    NEXT
+
 # create ( "name" -- )  Build a header at HERE; the word pushes its pfa (the
 # first data cell, after the code field and the DOES> slot) when executed.
 #   : variable create 0 , ;
@@ -1305,7 +1316,8 @@ defcode "create",6,,CREATE
 # works), so setting the flag on the LATEST word is all that is needed.
 # Usage, standard Forth style:  : name ... ; immediate
 defcode "immediate",9,,IMMEDIATE
-    li t1, var_LATEST
+    li t1, var_CURRENT
+    lw t1, 0(t1)
     lw t1, 0(t1)        # address of the most recent word
     lbu t2, CELL(t1)    # its flags+length byte
     ori t2, t2, F_IMMEDIATE # set the immediate bit
@@ -1333,9 +1345,8 @@ defcode "'",1,F_IMMEDIATE,TICK
     sub t0, t0, t2
     sw t0, 0(a4)
     beqz a1, err_error  # ' with nothing after it
-    li a2, var_LATEST   # lookup by name: a0 = token address, a1 = length
-    lw a2, 0(a2)
-    call lookup         # a1 = word header address (lookup errors out if not found)
+    call lookup         # by name: a0 = token address, a1 = length; returns
+                        # a1 = word header address (errors out if not found)
     mv a0, a1
     call to_cfa         # a0 = code field address
     # state-smart: push when executing, compile a literal when compiling
@@ -1371,9 +1382,12 @@ defcode ">cfa",4,,TCFA
     sw a0, 0(sp)        # store it back on the stack
     NEXT
 
-# latest ( -- addr )     Store LATEST variable address in top of data stack
+# latest ( -- addr )     Address of the cell that holds the newest word of the
+# vocabulary definitions go to (so  latest @  is the word just defined). In
+# FORTH that cell is the LATEST variable; in another vocabulary, its head cell.
 defcode "latest",6,,LATEST
-    li t1, var_LATEST   # load variable into temporary
+    li t1, var_CURRENT
+    lw t1, 0(t1)
     PUSH t1
     NEXT
 
@@ -1383,11 +1397,13 @@ defcode "state",5,,STATE
     PUSH t1
     NEXT
 
-# words ( -- )          List the names of all visible words in the dictionary,
-# newest first. This is the payoff of storing names instead of hashes.
+# words ( -- )          List the names of all visible words of the context
+# vocabulary, newest first (FORTH unless a vocabulary was selected:
+# `edit words forth` lists the bindings of edit).
 defcode "words",5,,WORDS
-    li a3, var_LATEST   # a3 (Z) survives uart_print/uart_put (they clobber
+    li a3, var_CONTEXT  # a3 (Z) survives uart_print/uart_put (they clobber
     lw a3, 0(a3)        # only a0-a2, t0, t1, ra) so it holds the chain pointer
+    lw a3, 0(a3)        # newest word of the context vocabulary
 words_loop:
     beqz a3, words_done # end of the dictionary: link is 0
     lbu t0, CELL(a3)    # load the flags+length byte
@@ -1405,6 +1421,137 @@ words_next:
     lw a3, 0(a3)        # follow the link to the previous word
     j words_loop
 words_done:
+    NEXT
+
+##
+# Vocabularies (fig-Forth style)
+#
+# A vocabulary is a second, separate chain of words.  vocabulary edit  makes
+# one; typing its name (edit) makes it the CONTEXT: the interpreter then looks
+# a word up in edit first and in FORTH second.  definitions  makes the context
+# the CURRENT vocabulary as well, the one new words are added to.  forth
+# selects the main vocabulary again:
+#     vocabulary edit
+#     edit definitions   : k3 ... ;   forth definitions
+# The same name can so mean different things in different vocabularies, which
+# is what the phone uses for its modes (the same key does something else while
+# dialling, in a call, in the editor). The key handler should not switch
+# CONTEXT for that, since CONTEXT also decides what the console and the log
+# replay find: keep the mode in a variable of its own and look bindings up
+# with find-name-in.
+# Any error puts CONTEXT and CURRENT back to FORTH (see reset).
+##
+
+# forth ( -- )          Make FORTH the context vocabulary
+defcode "forth",5,,FORTH
+    li t1, var_LATEST           # FORTH's head cell
+    li t2, var_CONTEXT
+    sw t1, 0(t2)
+    NEXT
+
+# definitions ( -- )    New words go to the context vocabulary from now on
+defcode "definitions",11,,DEFINITIONS
+    li t1, var_CONTEXT
+    lw t1, 0(t1)
+    li t2, var_CURRENT
+    sw t1, 0(t2)
+    NEXT
+
+# context ( -- addr )   Variable: head cell of the vocabulary searched first
+defcode "context",7,,CONTEXT
+    li t1, var_CONTEXT
+    PUSH t1
+    NEXT
+
+# current ( -- addr )   Variable: head cell of the vocabulary definitions go to
+defcode "current",7,,CURRENT
+    li t1, var_CURRENT
+    PUSH t1
+    NEXT
+
+# voc-link ( -- addr )  Variable: the newest vocabulary (the address of its
+# link cell, which follows its head cell), 0 if there is none. forget walks
+# this list to trim every vocabulary.
+defcode "voc-link",8,,VOCLINK
+    li t1, var_VOCLINK
+    PUSH t1
+    NEXT
+
+# >body ( cfa -- pfa )  From the code field of a CREATEd word to its first data
+# cell (past the code field and the DOES> slot).  ' edit >body  is the head
+# cell of the vocabulary edit, the value find-name-in takes.
+defcode ">body",5,,TBODY
+    checkunderflow 0
+    lw t1, 0(sp)
+    addi t1, t1, 2*CELL
+    sw t1, 0(sp)
+    NEXT
+
+.balign CELL
+# unlink from one vocabulary every word at or above an address
+# arguments: a2 = head cell of the vocabulary, a1 = the address
+# (within a chain the addresses fall from link to link, and flash is below RAM)
+# clobbers: t0
+trim_chain:
+    lw t0, 0(a2)                # the newest word left in the chain
+    bltu t0, a1, trim_done      # it is older (or the chain is empty: 0)
+    lw t0, 0(t0)                # drop it: the word before it becomes the newest
+    sw t0, 0(a2)
+    j trim_chain
+trim_done:
+    ret
+
+# forget ( "name" -- )  Remove a word and everything defined after it, in every
+# vocabulary, and give the memory back. Vocabularies defined after it go too.
+# Words in flash (below RAM_BASE) cannot be forgotten.
+defcode "forget",6,,FORGET
+    li t2, TIB_BOTTOM
+    li a4, var_TOIN
+    lw a0, 0(a4)
+    add a0, a0, t2              # a0 = parse position in the TIB
+    call token                  # a0 = token start, a1 = token length
+    li t2, TIB_BOTTOM
+    add t0, a0, a1
+    sub t0, t0, t2
+    sw t0, 0(a4)                # TOIN moves past the token
+    beqz a1, err_error          # forget with no name
+    call search_order           # a2 = header, or 0
+    beqz a2, err_error          # no such word
+    li t0, RAM_BASE
+    bltu a2, t0, err_error      # a word in flash
+    mv a1, a2                   # a1 = everything from here up goes
+    li a2, var_LATEST
+    call trim_chain             # FORTH
+    li a3, var_VOCLINK          # a3 = the cell that points at the next vocabulary
+forget_voc:
+    lw a2, 0(a3)                # its link cell (0 = no more)
+    beqz a2, forget_order
+    bltu a2, a1, forget_keep
+    lw t0, 0(a2)                # the vocabulary itself goes: take it off the list
+    sw t0, 0(a3)
+    j forget_voc
+forget_keep:
+    mv a3, a2                   # the list continues from its link cell
+    addi a2, a2, -CELL          # its head cell sits just below
+    call trim_chain
+    j forget_voc
+forget_order:
+    # CONTEXT and CURRENT must not be left pointing into a forgotten vocabulary
+    li t0, var_LATEST           # FORTH's head cell (it lies above the dictionary)
+    li t1, var_CONTEXT
+    lw t2, 0(t1)
+    beq t2, t0, forget_current
+    bltu t2, a1, forget_current
+    sw t0, 0(t1)
+forget_current:
+    li t1, var_CURRENT
+    lw t2, 0(t1)
+    beq t2, t0, forget_here
+    bltu t2, a1, forget_here
+    sw t0, 0(t1)
+forget_here:
+    li t0, var_HERE
+    sw a1, 0(t0)                # HERE = the header of the forgotten word
     NEXT
 
 ##

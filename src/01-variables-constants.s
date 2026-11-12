@@ -36,7 +36,14 @@
 # because the words that use them (10-forth-words.s) live in flash.
 .equ var_BASE, LOGEND - CELL            # 1 CELL: number base for . u. # (see base)
 .equ var_HLD, var_BASE - CELL           # 1 CELL: <# ... #> build pointer (see hld)
-.equ PAD, var_HLD - (CELL * 64)         # 64 CELLS between var_HLD and PAD
+# CH32V006 PORT: vocabularies. A vocabulary is known by the address of its head
+# cell, the cell that holds the header of its newest word. FORTH's head cell is
+# var_LATEST; the head cell of a vocabulary made with `vocabulary` is the first
+# data cell of that word.
+.equ var_CONTEXT, var_HLD - CELL        # 1 CELL: head cell of the vocabulary searched first
+.equ var_CURRENT, var_CONTEXT - CELL    # 1 CELL: head cell of the vocabulary definitions go to
+.equ var_VOCLINK, var_CURRENT - CELL    # 1 CELL: newest vocabulary (its link cell), 0 = none
+.equ PAD, var_VOCLINK - (CELL * 64)     # 64 CELLS between var_VOCLINK and PAD
 # CH32V006 PORT: pending batch buffer for the log. Lines of a multi-line
 # definition are held here and committed to flash only when a line ends with
 # STATE = 0, so a definition reaches the log whole or not at all.
