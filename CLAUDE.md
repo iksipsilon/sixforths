@@ -235,7 +235,9 @@ Layout:
 3. **Never flash, wipe, or erase flash without asking first.** Before anything that
    writes the log region, read it back and tell the owner what is there. Explain in
    one sentence what the command will do to the board.
-4. Hardware tests over UART: sync on the echo after every line; save and restore
+4. Hardware tests over UART: sync on the echo after every line, and wait for `ok` or `?`
+   rather than for a pause (a line like `5000 ms` prints nothing for seconds, and the
+   board does not read the UART meanwhile); save and restore
    `here` / `latest`; run the Forth words `s0 sp!` between tests (Forth `s0` = data-stack base, unrelated to
    register `s0`); start from a known state (log wiped
    or PD4 held); treat a `T<mcause> <mepc>` line as a failed test, then reset the chip
@@ -362,12 +364,14 @@ The steps:
    (`docs/output/LED-matrix/Bitbang-LED-matrix.S` already keeps to the allowed registers),
    sample the 8 keys through the 74HC165, count time. This is the one interrupt. Split in
    three (the owner, 2026-11-12; nothing is wired yet):
-   - 5a, the tick itself. **Done in the emulator 2026-11-12, not yet on the board.**
+   - 5a, the tick itself. **Done 2026-11-12, checked on the board.**
      SysTick's compare interrupt every `TICK_PERIOD` (6000 ticks = 2 ms); the counter runs
      free, so `ticks` `ms` `mkey` are unchanged. `tick_isr` puts the next compare one period
      on, or one period after now when it ran late (flash work holds the core up; a compare
      in the past would not match again for 23.9 minutes), and counts `irqs`. HPE is on, so
-     traps stack a frame too. On the board: `irqs 1000 ms irqs swap - .` should be about 500.
+     traps stack a frame too. On the board: 500 ticks in 1000 ms, 2500 in 5.0012 s; 16 page
+     erases (46.9 ms) let 16 late ticks through and the tick was back at 500 a second at
+     once; a 40-cell stack survived the ticks; `reboot` and a hardware reset restart it.
    - 5b, the LED row refresh in the tick (pins PC0, PC2, PA1, PA2; needs the matrix wired).
    - 5c, the keys through the 74HC165 (shares CLK and OE, one more input pin; not tried).
 6. **Key input**: chords are decoded on release (OR everything pressed since the first
