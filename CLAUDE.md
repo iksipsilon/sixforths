@@ -186,9 +186,10 @@ Layout:
 
 ## Open work
 
-- `+log` works on silicon (FTPG appends, replay after every reset, tested 2026-11-12).
-  Not yet tested on the board: a batch crossing a page boundary (load the prelude with
-  logging on), the log-full path, and `wipe`.
+- `+log` works on silicon (tested 2026-11-12): FTPG appends, replay after every reset,
+  `wipe`, and the whole prelude logged across 9 pages (byte-identical to the emulator).
+  Not yet tested on the board: the log-full path. Note the log starts with `+log`, so
+  every boot turns logging on again and every typed line is saved; `-log` is not logged.
 - Add a pyserial backend to `emulators/test_fotrh.py` so the same tests run against the real
   board (and against the emulator through a fake port).
 - A freeze script to turn stable prelude words into flash words.
