@@ -238,10 +238,11 @@ Layout:
 
 ## Open work
 
-Done in `kernel-phase1` (all tested in the emulator, **not yet run on the board**): HERE
-alignment, interrupt-safe PUSH, the merged primitives file, the prelude in flash,
-`s=` `scan` `/string`, the user flash page words, error recovery by the hidden flag,
-vocabularies.
+Done in `kernel-phase1` (all tested in the emulator; flashed on 2026-11-12, and the Phase 2
+step 1 checks passed on the board): HERE alignment, interrupt-safe PUSH, the merged
+primitives file, the prelude in flash, `s=` `scan` `/string`, the user flash page words,
+error recovery by the hidden flag, vocabularies. Not yet run on the board: `fpage-erase` /
+`fpage-prog`.
 
 Still open from before:
 - The log-full path has not been tested on the board. Note the log starts with `+log`, so
@@ -278,6 +279,13 @@ The steps:
    by hand: `words`, `5 6 + .`, `: sq dup * ; 7 sq .`, `3 allot nosuchword` (must print
    `?`, not a `T...` trap line), `vocabulary edit edit definitions : k3 70 emit ;
    forth definitions edit k3 forth`, and a `+log` / reset / replay round trip.
+   **Done 2026-11-12**: all passed, the replay after `reboot` and after `minichlink -b`
+   matched the emulator byte for byte, and the board's log is wiped again. Learned:
+   `minichlink -w` rewrites only the pages it writes, so **the log survives a kernel
+   reflash** and replays on the new kernel's first boot (send `wipe` as the first line, or
+   hold PD4, when the old log does not suit the new kernel). The first minichlink
+   connection after a `wipe` printed `link error, nothing connected to linker` five times
+   (2 of 2), then worked and read correctly; cause unknown.
 2. **`ticks` and `ms`.** A free-running counter read by polling (SysTick), no interrupt.
    Needed for every timeout below.
 3. **Modem on USART2, received through DMA into a ring buffer in RAM.** No interrupt: the
