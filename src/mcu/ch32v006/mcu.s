@@ -72,6 +72,23 @@
 .equ GPIOD_BCR, 0x14            # bit clear register offset (write 1 = output 0)
 .equ LOG_SKIP_BIT, (1 << 4)     # PD4
 
+##
+# SysTick (STK) - CH32V006 PORT, for ticks and ms (13-ticks.s)
+# Reference manual V1.5, 6.5.4 "STK Register Description" (Table 6-5), and
+# QingKe V2 processor manual V1.3, chapter 4: a 32-bit up-counter in the
+# core, clocked by HCLK or HCLK/8. All four registers reset to 0.
+##
+.equ STK_BASE, 0xE000F000       # Table 6-5: R32_STK_CTLR is at the base
+.equ STK_CTLR, 0x00             # 6.5.4.1 System Count Control Register
+.equ STK_SR, 0x04               # 6.5.4.2 System Count Status Register (CNTIF in bit 0)
+.equ STK_CNTL, 0x08             # 6.5.4.3 System Counter Register, CNT[31:0]
+.equ STK_CMPLR, 0x10            # 6.5.4.4 Counting Comparison Register, CMP[31:0]
+.equ STK_CTLR_STE, (1 << 0)     # 1: the counter runs, 0: it stops
+.equ STK_CTLR_STIE, (1 << 1)    # 1: counter interrupt enabled
+.equ STK_CTLR_STCLK, (1 << 2)   # 1: HCLK, 0: HCLK/8
+.equ STK_CTLR_STRE, (1 << 3)    # 1: restart from 0 at the compare value, 0: keep counting up
+.equ STK_TICKS_PER_MS, CPU_FREQ / 8 / 1000   # HCLK/8 = 3 MHz: 3000 ticks per ms
+
 .balign CELL
 # Initialize the UART
 uart_init:

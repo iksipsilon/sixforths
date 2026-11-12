@@ -365,11 +365,21 @@ for name, src in (("the kernel", "0x08000000 fpage-erase"), ("the log", "0x08004
 e, out, _ = h.session(P, "0x0800F7FF fpage-erase 0x08006800 fpage-erase 65 emit\n")
 check("first and last user page are allowed", e, out, ["emit\nA"])
 
+# ---- ticks and ms (the emulator's SysTick counts one HCLK cycle per instruction) ----
+t("SysTick runs on HCLK/8, no reload, no interrupt", "0xE000F000 @ .", "1 ")
+t("ticks advances, by less than 1 ms", "ticks ticks swap - dup 0> . 3000 < .", "-1 -1 ")
+t("10 ms waits 30000 ticks", "ticks 10 ms ticks swap - dup 30000 < . 33000 < .", "0 -1 ")
+t("0 ms and -5 ms return at once", "ticks 0 ms -5 ms ticks swap - 3000 < .", "-1 ")
+t("ms across the wrap", "0xFFFFF000 0xE000F008 ! ticks 2 ms ticks over 0xF0000000 u> . dup 0x10000 u< . swap - dup 6000 < . 9000 < .",
+  "-1 -1 0 -1 ")
+t("ms on an empty stack", "ms", "? stack underflow", absent=())
+
 # ---- words ----
 e, out, _ = h.session(P, "words\n")
 names = out.split("\n")[1].split()                # line 0 is the echoed input
 print("word count:", len(names))
 check("words lists new primitives", e, out, ["um/mod", "xdoes", "find-name", "parse", "um*", "quit"])
+check("words lists ms and ticks first", e, out, ["\n ms ticks wipe "])
 
 print("\nALL PASS" if failures == 0 else f"\n{failures} FAILURES")
 sys.exit(1 if failures else 0)

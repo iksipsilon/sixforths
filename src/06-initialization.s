@@ -13,6 +13,7 @@ boot:
 
     call interrupt_init # RISC-V interrupt CSR initialization
     call uart_init      # board specific UART initialization
+    call ticks_init     # CH32V006 PORT: start SysTick for ticks and ms (13-ticks.s)
     call gpio_init      # board specific GPIO initialization (a0 = skip button)
 
     # arm the boot replay unless the skip button (PD4 high) is held:

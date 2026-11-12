@@ -99,7 +99,7 @@ hardware.
 
 - Flash 0x00000000: kernel + `.rodata`, **must stay under 16 KiB** (`FLASH` `LENGTH` in
   `src/board/ch32v006f8u6/linker.ld`; confirm it says 16k).
-  Currently 12,268 bytes (171 words). Report the size after every change.
+  Currently 12,412 bytes (173 words). Report the size after every change.
 - Flash 0x08004000-0x08006800: source-replay log (10 KiB).
 - Flash 0x08006800-0x0800F800 (`USER_FLASH`..`FLASH_TOP`, 36 KiB): the application's own
   data, written a 256-byte page at a time with `fpage-erase ( page -- )` and
@@ -174,7 +174,7 @@ defines lives in RAM, so a reset loses it unless `+log` was on.
 
 Layout:
 - `sixforths.s` (repo root) is the top-level file. It includes `board.s`, `mcu.s`, then
-  `src/01-*.s` ... `src/12-flash-log.s` **in that order**. The dictionary follows the
+  `src/01-*.s` ... `src/13-ticks.s` **in that order**. The dictionary follows the
   include order, and `.equ last_word, link` after the last include marks its end. It is
   searched from the end, so words in later files are found first.
 - `src/board/ch32v006f8u6/` holds `board.s` and `linker.ld`; `src/mcu/ch32v006/` holds
@@ -193,6 +193,7 @@ Layout:
   code (`type`: 32 bytes against 64); words that mostly call other words are shorter and
   safer as threads.
 - `src/12-flash-log.s` holds the source log and the user flash page words.
+- `src/13-ticks.s` holds `ticks` and `ms` (SysTick, polled).
 - `emulators/` holds `rv32emu.py` (the owner's RV32EC emulator: alignment, RV32E register
   use, FPEC sequencing and illegal instructions all fault), `harness.py` (boots
   `../sixforths.bin` in it), `test_fotrh.py` (the tests; it loads `../prelude.f`) and
@@ -257,13 +258,14 @@ Work this list from the top, **one item per session**, and stop after each for t
 to test on the board. The reasons behind each choice are in `etc/answers.md`.
 
 Rules for all of it:
-- The emulator has no USART2, DMA, timer or interrupt model. Before writing a driver, add
+- The emulator has no USART2, DMA, TIMx or interrupt model (its SysTick counts one HCLK
+  cycle per instruction and faults on STIE, STRE, SR and CMPLR). Before writing a driver, add
   the smallest model of that device to `emulators/rv32emu.py` so the words can be tested
   there, and say plainly which part can only be checked on the board.
 - Look every register address and bit up in `docs/ch32v006/CH32V00XRM.PDF` (only the pages
   needed) and quote the section in a comment. Do not write a register from memory.
-- A device gets its own numbered file with its machine code and its words (`13-modem.s`,
-  `14-display.s`, ...); pin and register equates go to `mcu.s`. Keep one pin table in this
+- A device gets its own numbered file with its machine code and its words (`14-modem.s`,
+  `15-display.s`, ...); pin and register equates go to `mcu.s`. Keep one pin table in this
   file once pins are assigned (the QFN20 has few: count them before promising one).
 - Interrupts: at most **one**, and it must not nest. Its routine may use only `ra`,
   `t0-t2`, `a0-a5` (the hardware prologue saves exactly those) and must not touch `sp`,
@@ -288,6 +290,10 @@ The steps:
    (2 of 2), then worked and read correctly; cause unknown.
 2. **`ticks` and `ms`.** A free-running counter read by polling (SysTick), no interrupt.
    Needed for every timeout below.
+   **Done in the emulator 2026-11-12, not yet on the board.** `ticks ( -- u )` is the
+   SysTick count on HCLK/8: 3000 per ms (`STK_TICKS_PER_MS`), wrapping every 23.9 min;
+   `ticks t0 -` is the time since t0. `ms ( n -- )` treats n as signed (n <= 0 returns at
+   once). On the board: time `5000 ms` from the PC (5.0 s expected).
 3. **Modem on USART2, received through DMA into a ring buffer in RAM.** No interrupt: the
    main loop polls the buffer (`mkey?` `mkey` `memit`). First experiment on the board,
    before any more code: does the DMA keep storing bytes while a flash page is erased

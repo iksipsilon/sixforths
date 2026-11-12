@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Minimal RV32EC + Zmmul + Zicsr emulator, just enough to run fiveforths.bin
-# Flash at 0x00000000, 8K RAM at 0x20000000, USART1 at 0x40013800.
+# Flash at 0x00000000, 8K RAM at 0x20000000, USART1 at 0x40013800, SysTick at 0xE000F000.
 import sys
 
 M32 = 0xFFFFFFFF
@@ -44,6 +44,22 @@ class Emu:
         # the WCH-LinkE's RX pull-up, so PD4 reads low only while PD5 is a
         # general-purpose output driving 0 (checked on the board)
         self.weact_bridge = False
+        # SysTick (reference manual 6.5.4): a 32-bit up-counter on HCLK/8
+        # (STCLK = 0) or HCLK (STCLK = 1). The model counts one HCLK cycle per
+        # instruction, so its times are not the chip's; the order of events
+        # and the wrap are. CTLR (STE, STCLK) and CNTL are modelled; the
+        # interrupt (STIE, SWIE), auto-reload (STRE), SR and CMPLR are not,
+        # and fault.
+        self.cycles = 0          # instructions executed so far
+        self.stk_ctlr = 0        # STK_CTLR
+        self.stk_cnt0 = 0        # the count at cycle stk_at
+        self.stk_at = 0
+
+    def stk_cnt(self):
+        if not self.stk_ctlr & 1:                   # STE = 0: stopped
+            return self.stk_cnt0
+        div = 1 if self.stk_ctlr & 4 else 8         # STCLK
+        return (self.stk_cnt0 + (self.cycles - self.stk_at) // div) & M32
 
     def _flash_pa(self, a):
         # normalize a flash address (0x00000000 alias or 0x08000000 base)
@@ -78,6 +94,12 @@ class Emu:
             return 0
         if a == 0x40022010:  # FLASH_CTLR
             return self.fpec['ctlr']
+        if a == 0xE000F000:  # STK_CTLR
+            return self.stk_ctlr
+        if a == 0xE000F008:  # STK_CNTL
+            return self.stk_cnt()
+        if 0xE000F000 <= a < 0xE000F020:  # STK_SR, STK_CMPLR: not modelled
+            self.fault = ("stk-unmodelled", self.pc, a); raise RuntimeError()
         return self.r8(a) | self.r8(a+1)<<8 | self.r8(a+2)<<16 | self.r8(a+3)<<24
     def r16(self, a):
         if a & 1:
@@ -94,6 +116,15 @@ class Emu:
             self.fault = ("misaligned-store", self.pc, a); raise RuntimeError()
         self.stores.append((self.pc, a, v & M32)); self.stores = self.stores[-16:]
         if a == 0x40013804: self.uart_out.append(v & 0xFF); return
+        if a == 0xE000F000:  # STK_CTLR: only STE (bit 0) and STCLK (bit 2) are modelled
+            if v & ~0x5 & M32:
+                self.fault = ("stk-unmodelled", self.pc, a); raise RuntimeError()
+            self.stk_cnt0, self.stk_at = self.stk_cnt(), self.cycles  # keep the count
+            self.stk_ctlr = v & M32; return
+        if a == 0xE000F008:  # STK_CNTL: the counter goes on from the written value
+            self.stk_cnt0, self.stk_at = v & M32, self.cycles; return
+        if 0xE000F000 <= a < 0xE000F020:  # STK_SR, STK_CMPLR: not modelled
+            self.fault = ("stk-unmodelled", self.pc, a); raise RuntimeError()
         if a == 0x40022004:  # FLASH_KEYR: KEY1 then KEY2 unlocks programming
             if v == 0x45670123 and self.fpec['kstage'] == 0:
                 self.fpec['kstage'] = 1
@@ -189,6 +220,7 @@ class Emu:
 
     def step(self):
         pc = self.pc
+        self.cycles += 1         # SysTick model: one HCLK cycle per instruction
         lo = self.r16(pc)
         self.trace.append(pc); self.trace = self.trace[-64:]
         if (lo & 3) != 3:
