@@ -222,8 +222,6 @@ Layout:
   A7670X HAT schematic, Moving Forth parts 1-8). Read only the pages you need.
   `docs/docs-from-claude/` holds files handed over from chat; `old-docs/` looks like older
   notes. Neither is source.
-- `openocd.cfg`, `ft232r.cfg`, `debug.gdb` look like an older OpenOCD / gdb debugging
-  setup. Ask the owner before using them; flashing normally goes through minichlink.
 
 ## How to work here
 

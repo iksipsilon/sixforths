@@ -51,17 +51,6 @@ $(PROGNAME).elf: src/board/$(BOARD)/linker.ld
 readelf: $(PROGNAME).elf
 		$(READELF) -a $<
 
-serve:
-		bundle exec jekyll serve
-
-openocd:
-		/opt/riscv/bin/openocd -f ft232r.cfg -f openocd.cfg
-
-debug:
-		/opt/riscv/bin/riscv64-unknown-elf-gdb -command=debug.gdb -q fiveforths.elf
-
-flash:
-
 # CH32V006 PORT: flash over SDI with a WCH-LinkE using minichlink
 # (https://github.com/cnlohr/ch32fun); -b reboots the chip after writing
 flash-ch32v006:
