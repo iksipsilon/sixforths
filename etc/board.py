@@ -15,7 +15,9 @@ anything that writes flash needs the owner's go-ahead first (CLAUDE.md rule 3).
 Each character waits for its echo before the next one goes out (the board's
 receiver holds only 1-2 bytes, and the board does not read the UART while it
 runs a line). Each line then waits for "ok" or "?" - not for a pause, since a
-line like `5000 ms` prints nothing for seconds. A trap line "T<mcause> <mepc>"
+line like `5000 ms` prints nothing for seconds. After "ok rebooting" it reads
+on until the board has been quiet for 1.5 s, so the banner belongs to that
+line and the next line starts in step. A trap line "T<mcause> <mepc>"
 is flagged; reset the chip with `minichlink -b` after one.
 Close picocom first: two programs reading the port steal each other's bytes.
 Saved from the 2026-11-12 session, where phase 2 steps 1-5a were tested with it.
@@ -26,7 +28,8 @@ import serial
 PORT = "/dev/ttyACM0"
 REPO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 TRAP = re.compile(rb"(^|\n)T[0-9A-Fa-f]{1,8} [0-9A-Fa-f]{1,8}")
-DONE = re.compile(rb"(   ok\n|   ok rebooting\n| {2,3}\?[^\n]*\n)$")
+DONE = re.compile(rb"(   ok\n| {2,3}\?[^\n]*\n)$")
+REBOOTING = b"   ok rebooting\n"      # the banner follows at once, so it is never at the end
 
 def show(label, data):
     print(f"--- {label} ---")
@@ -68,6 +71,9 @@ def send_line(s, line, total=60.0):
         if c:
             out += c
             last = time.time()
+        if REBOOTING in out:
+            out += drain(s, idle=1.5, total=30.0)    # the banner, and any log replay
+            break
         if DONE.search(out):
             break
         if TRAP.search(out) and time.time() - last > 1.0:
@@ -121,7 +127,7 @@ def main():
         while b"\n" not in out:
             out += s.read(1)
         t_start = time.monotonic()
-        while not DONE.search(out) and time.monotonic() - t_start < 60:
+        while not (DONE.search(out) or REBOOTING in out) and time.monotonic() - t_start < 60:
             out += s.read(s.in_waiting or 1)
         t_end = time.monotonic()
         show(line, line.encode() + out)
