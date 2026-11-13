@@ -61,10 +61,7 @@ _start:
     .word tick_isr                  # 0x30: vector 12, SysTick: the tick (13-ticks.s)
 .option pop
 
-# include board-specific functions and constants from src/boards/<board>/
-.include "board.s"
-
-# include MCU-specific functions and constants from src/mcus/<MCU>/
+# include the chip's constants (RAM size, registers, pins) from src/mcu.s
 .include "mcu.s"
 
 # include source files from src/

@@ -1,5 +1,5 @@
 ##
-# CH32V006 (QingKe V2C, RV32EC + Zmmul)
+# CH32V006F8U6 (QingKe V2C, RV32EC + Zmmul; QFN20, 62 KiB flash, 8 KiB SRAM)
 #
 # CH32V006 PORT: this file is a full rewrite of src/mcus/gd32vf103/mcu.s.
 # The WCH peripheral map is STM32F1-flavoured like the GD32VF103's, so the
@@ -17,6 +17,10 @@
 
 .equ CELL, 4                            # 32-bits cell size
 .equ RAM_BASE, 0x20000000               # base address of RAM (same as GD32V)
+# CH32V006 PORT: RAM_SIZE was the only line of the old board file (board.s).
+# 01-variables-constants.s builds the RAM map down from RAM_BASE + RAM_SIZE.
+# It must match the RAM LENGTH in linker.ld.
+.equ RAM_SIZE, 1024 * 8                 # 8 KiB (the Longan Nano had 20 KiB)
 .equ STACK_SIZE, 256                    # 256 Bytes
 
 # UART (USART1 on the CH32V006; default mapping: TX = PD5, RX = PD6)

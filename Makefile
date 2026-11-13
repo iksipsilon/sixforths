@@ -10,7 +10,8 @@ OBJCOPY := $(CROSS)objcopy
 OBJDUMP := $(CROSS)objdump
 READELF := $(CROSS)readelf
 
-# MCU and board specific variables
+# MCU specific variables (the chip's constants are in src/mcu.s, its
+# memory regions in linker.ld)
 # CH32V006 PORT: the QingKe V2C is RV32EC with the Zmmul (multiply-only)
 # extension. rv32ec_zicsr_zmmul needs binutils >= 2.39; on older binutils
 # use ARCH=rv32ec_zicsr and swap the single `mul` instruction in
@@ -18,8 +19,6 @@ READELF := $(CROSS)readelf
 # fallback.
 ARCH ?= rv32ec_zicsr_zmmul
 EMU ?= elf32lriscv
-MCU ?= ch32v006
-BOARD ?= ch32v006f8u6
 
 TERMINAL ?= /dev/ttyACM0
 
@@ -30,14 +29,14 @@ build: $(PROGNAME).o $(PROGNAME).elf $(PROGNAME).bin $(PROGNAME).hex $(PROGNAME)
 
 # CH32V006 PORT: the pattern rule below only tracks fiveforths.s, but the
 # real sources are .include'd -- declare them so edits trigger a rebuild
-$(PROGNAME).o: $(wildcard src/*.s) $(wildcard src/mcu/$(MCU)/*.s) $(wildcard src/board/$(BOARD)/*.s)
-$(PROGNAME).elf: src/board/$(BOARD)/linker.ld
+$(PROGNAME).o: $(wildcard src/*.s)
+$(PROGNAME).elf: linker.ld
 
 %.o: %.s
-		$(AS) $(CFLAGS) -march=$(ARCH) -I src/board/$(BOARD) -I src/mcu/$(MCU) -I src -o $@ $<
+		$(AS) $(CFLAGS) -march=$(ARCH) -I src -o $@ $<
 
 %.elf: %.o
-		$(LD) -m $(EMU) -T src/board/$(BOARD)/linker.ld -o $@ $<
+		$(LD) -m $(EMU) -T linker.ld -o $@ $<
 
 %.bin: %.elf
 		$(OBJCOPY) -O binary $< $@
@@ -68,10 +67,6 @@ flash-ch32v006:
 
 term:
 		picocom -b 115200 --imap lfcrlf --omap crlf --send-cmd "ascii-xfr -sv -l 100" $(TERMINAL)
-
-# CH32V006 PORT: build for the CH32V006F8U6 (this is also the default)
-ch32v006f8u6:
-		$(MAKE) build BOARD=ch32v006f8u6 MCU=ch32v006 ARCH=rv32ec_zicsr_zmmul
 
 clean:
 		rm -v *.bin *.elf *.o *.hex *.dump

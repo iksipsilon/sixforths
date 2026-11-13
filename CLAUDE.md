@@ -102,7 +102,7 @@ hardware.
 ## Memory map (verify with `riscv64-unknown-elf-nm sixforths.elf`)
 
 - Flash 0x00000000: kernel + `.rodata`, **must stay under 16 KiB** (`FLASH` `LENGTH` in
-  `src/board/ch32v006f8u6/linker.ld`; confirm it says 16k).
+  `linker.ld` at the repo root; confirm it says 16k).
   Currently 13,596 bytes (182 words). Report the size after every change.
 - Flash 0x08004000-0x08006800: source-replay log (10 KiB).
 - Flash 0x08006800-0x0800F800 (`USER_FLASH`..`FLASH_TOP`, 36 KiB): the application's own
@@ -164,9 +164,7 @@ Run from the repo root:
     python3 emulators/check_threads.py  # compares the threads in src/10-forth-words.s with the compiler's output
 
 The Makefile runs `riscv64-unknown-elf-as -g -march=rv32ec_zicsr_zmmul` with
-`-I src/board/ch32v006f8u6 -I src/mcu/ch32v006 -I src`, then
-`riscv64-unknown-elf-ld -m elf32lriscv -T src/board/ch32v006f8u6/linker.ld`, then
-`objcopy`. The `.o` depends on every `src/*.s`, so a new `.s` file in `src/` is picked up
+`-I src`, then `riscv64-unknown-elf-ld -m elf32lriscv -T linker.ld`, then `objcopy`. The `.o` depends on every `src/*.s`, so a new `.s` file in `src/` is picked up
 automatically (add its `.include` to `sixforths.s`). Ubuntu package:
 `binutils-riscv64-unknown-elf`. Build outputs are git-ignored.
 
@@ -183,12 +181,12 @@ waits 100 ms (the board does not read the UART while it processes a line). What 
 defines lives in RAM, so a reset loses it unless `+log` was on.
 
 Layout:
-- `sixforths.s` (repo root) is the top-level file. It includes `board.s`, `mcu.s`, then
+- `sixforths.s` (repo root) is the top-level file. It includes `src/mcu.s`, then
   `src/01-*.s` ... `src/14-modem.s` **in that order**. The dictionary follows the
   include order, and `.equ last_word, link` after the last include marks its end. It is
   searched from the end, so words in later files are found first.
-- `src/board/ch32v006f8u6/` holds `board.s` and `linker.ld`; `src/mcu/ch32v006/` holds
-  `mcu.s` (pin and register equates). Folder names are singular (`board`, `mcu`).
+- `src/mcu.s` holds the chip's constants: `RAM_SIZE`, pin and register equates.
+  `linker.ld` (repo root) holds the memory regions; its RAM `LENGTH` must match `RAM_SIZE`.
 - `src/08-primitives.s` holds every word written in machine code, sorted by function:
   inner interpreter, data stack, return stack, memory, arithmetic, logic, comparison,
   strings and parsing, compiler and dictionary, vocabularies, input and output, system.
