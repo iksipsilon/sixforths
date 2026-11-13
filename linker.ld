@@ -30,7 +30,6 @@ SECTIONS {
     /* The program code and other data goes into FLASH */
     .text :
     {
-        . = ALIGN(4);
         *(.text)           /* .text sections (code) */
         *(.rodata)         /* .rodata sections (constants, strings, etc.) */
     } >FLASH
