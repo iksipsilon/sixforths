@@ -60,7 +60,9 @@ RAM is the scarce resource, not flash.
 | 0x4000-0x67FF | 10 KiB | source-replay log |
 | 0x6800-0xF7FF | 36 KiB | user flash: application data |
 
-- The phonebook and the SMS stay on the SIM, so the 36 KiB are free.
+- The phonebook and the SMS stay on the SIM for now, so the 36 KiB are free. They may
+  move to the user flash or the SD card later, depending on how much the SIM holds
+  (section 9).
 - RAM dictionary: 6,856 bytes, **empty after boot** now that the prelude lives in flash
   (it used to take about 2.8 KiB at every boot). Buffers for the modem line, the SMS
   editor and two SD sectors will take roughly 1.5 KiB of it (estimate).
@@ -232,6 +234,10 @@ One of each and no more:
   call log may be written while the modem talks. Page programming was not tried.
 - Whether the A7670E has the "DC" / "MC" / "RC" lists (`AT+CPBS=?` shows it). The plan
   does not depend on them.
+- How much the SIM holds. `AT+CPBS?` gives the phonebook's used and total entries,
+  `AT+CPBR=?` the entry numbers and the longest number and name, `AT+CPMS?` the SMS slots
+  (`AT+CPMS=?` lists the storages the modem offers). It decides whether the phonebook and
+  the SMS stay on the SIM (section 2).
 - The 74HC165 wiring idea in section 5.
 - The RAM estimate for the phone's buffers in section 2.
 

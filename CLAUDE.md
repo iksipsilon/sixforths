@@ -109,7 +109,9 @@ hardware.
   data, written a 256-byte page at a time with `fpage-erase ( page -- )` and
   `fpage-prog ( src page -- )`. Both words refuse any other address, so they cannot damage
   the kernel or the log. Planned use: the call log in the top 4 KiB (0x0800E800-0x0800F7FF,
-  see `etc/answers.md`). The phonebook and the SMS stay on the SIM.
+  see `etc/answers.md`). The phonebook and the SMS stay on the SIM for now; they may move
+  to the user flash or the SD card later, depending on how much the SIM holds (not known
+  yet, see `etc/answers.md` section 9).
 - RAM 0x20000000: the user dictionary grows up from here (`HERE`). It is **empty after
   boot**: every kernel word lives in flash.
   `FORTH_SIZE` = 0x19B4 = **6,580 bytes** of dictionary budget, up to `DICT_TOP` (which is

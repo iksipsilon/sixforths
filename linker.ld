@@ -14,7 +14,7 @@
 MEMORY
 {
     FLASH (rx)      : ORIGIN = 0x00000000, LENGTH = 16k /* kernel region only: the
-        source-replay log (10k), phonebook and SMS slot regions live above;
+        source-replay log (10k) and the user flash (36k) live above;
         growing the kernel past 16k must fail the link, not eat the log */
     RAM (xrw)       : ORIGIN = 0x20000000, LENGTH = 8k
 }
