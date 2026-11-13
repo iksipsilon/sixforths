@@ -92,9 +92,13 @@ reset_replay_done:
 
     # initialize stack pointers
     # CH32V006 PORT: sp changes in one instruction (la takes two): the tick
-    # interrupt's HPE stores its frame below sp at any moment
-    la t0, __stacktop
-    mv sp, t0                   # initialize DSP register
+    # interrupt's HPE stores its frame below sp at any moment. li of an
+    # address whose low 12 bits are 0 is a single lui; any other address
+    # would take lui + addi, so the build stops instead.
+    .if DSP_TOP & 0xFFF
+    .error "DSP_TOP is not 4 KiB aligned: li sp, DSP_TOP would take two instructions"
+    .endif
+    li sp, DSP_TOP              # initialize DSP register (one lui)
     # CH32V006 PORT: interrupts on (the tick, 13-ticks.s), now that sp is valid.
     # At boot this is the first time; after an error they are on already.
     csrs mstatus, 0x08

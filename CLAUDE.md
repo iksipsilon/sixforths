@@ -62,7 +62,9 @@ hardware.
   register first (see `sp@`). `IRQ_FRAME` (48 bytes) stays free under the data stack for one
   frame, so it holds 52 cells and interrupts must not nest. **`sp` must change in one
   instruction**: `la sp, x` takes two, and a tick between them stores its frame through a
-  half-built `sp` (load the address into a register, then `mv sp`). The tick is on from
+  half-built `sp` (load the address into a register, then `mv sp`; `reset` uses
+  `li sp, DSP_TOP`, a single `lui` because DSP_TOP's low 12 bits are 0, which the build
+  checks). The tick is on from
   `reset` onwards, so this holds for all code that runs after boot.
 - Indirect threaded. Word header: link cell, flags+length byte, name, zero padding to
   a cell boundary, then the code field. Flags: `F_IMMEDIATE` 0x80, `F_HIDDEN` 0x20,
@@ -103,7 +105,7 @@ hardware.
 
 - Flash 0x00000000: kernel + `.rodata`, **must stay under 16 KiB** (`FLASH` `LENGTH` in
   `linker.ld` at the repo root; confirm it says 16k).
-  Currently 13,596 bytes (182 words). Report the size after every change.
+  Currently 13,592 bytes (182 words). Report the size after every change.
 - Flash 0x08004000-0x08006800: source-replay log (10 KiB).
 - Flash 0x08006800-0x0800F800 (`USER_FLASH`..`FLASH_TOP`, 36 KiB): the application's own
   data, written a 256-byte page at a time with `fpage-erase ( page -- )` and
@@ -188,7 +190,8 @@ Layout:
   include order, and `.equ last_word, link` after the last include marks its end. It is
   searched from the end, so words in later files are found first.
 - `src/mcu.s` holds the chip's constants: `RAM_SIZE`, pin and register equates.
-  `linker.ld` (repo root) holds the memory regions; its RAM `LENGTH` must match `RAM_SIZE`.
+  `linker.ld` (repo root) holds the memory regions. Nothing is placed in its RAM region,
+  but keep its `LENGTH` equal to `RAM_SIZE`.
 - `src/08-primitives.s` holds every word written in machine code, sorted by function:
   inner interpreter, data stack, return stack, memory, arithmetic, logic, comparison,
   strings and parsing, compiler and dictionary, vocabularies, input and output, system.

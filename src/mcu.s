@@ -19,7 +19,8 @@
 .equ RAM_BASE, 0x20000000               # base address of RAM (same as GD32V)
 # CH32V006 PORT: RAM_SIZE was the only line of the old board file (board.s).
 # 01-variables-constants.s builds the RAM map down from RAM_BASE + RAM_SIZE.
-# It must match the RAM LENGTH in linker.ld.
+# linker.ld names the RAM too (LENGTH = 8k) but places nothing there; keep
+# the two equal.
 .equ RAM_SIZE, 1024 * 8                 # 8 KiB (the Longan Nano had 20 KiB)
 .equ STACK_SIZE, 256                    # 256 Bytes
 
