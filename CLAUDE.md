@@ -338,7 +338,10 @@ The steps:
    matched the emulator byte for byte, and the board's log is wiped again. Learned:
    `minichlink -w` rewrites only the pages it writes, so **the log survives a kernel
    reflash** and replays on the new kernel's first boot (send `wipe` as the first line, or
-   hold PD4, when the old log does not suit the new kernel). minichlink sometimes prints
+   hold PD4, when the old log does not suit the new kernel). It also keeps the old bytes
+   after the end of the image in the last page it writes: after `3b085aa` (4 bytes shorter
+   than `a042149`) the old kernel's last 4 bytes stayed at 0x3518 (read back 2026-11-14).
+   Do not assume the flash after the kernel is erased. minichlink sometimes prints
    `link error, nothing connected to linker` five times when it connects (3 of 7
    connections, with and without a `wipe` before), then recovers and works; cause unknown.
 2. **`ticks` and `ms`.** A free-running counter read by polling (SysTick), no interrupt.
