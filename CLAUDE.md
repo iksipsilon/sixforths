@@ -273,7 +273,11 @@ Still open from before:
 
 **Where we stopped (2026-11-12): waiting for the display and key hardware**, which may
 take more than a month.
-- The board runs commit `a042149` (step 5a, 13,596 bytes). Its source log is empty, so
+- The board runs commit `3b085aa` (13,592 bytes; flashed 2026-11-14: `reset` sets `sp` with
+  `li sp, DSP_TOP`). Checked there: boot, an error with 3 cells on the stack and one inside
+  a definition (both leave `depth` 0), 40 cells through 1000 ms of ticks (500 ticks, the
+  sum intact), `reboot`. Flashing printed one stray byte before the banner; a plain
+  `minichlink -b` reset did not. Its source log is empty, so
   logging is off at boot, and the user flash is empty. A wire joins D2 and D3 (the USART2
   loopback; D2 is driven as an output at every boot) and the board's USB-C socket is
   unplugged. Nothing else is connected.
