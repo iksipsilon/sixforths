@@ -40,7 +40,7 @@
 .equ BAUD_RATE, 115200
 
 ##
-# FPEC (flash controller) - CH32V006 PORT, for the source-replay log
+# FPEC (flash controller) - CH32V006 PORT, for the source lines and the user flash
 # Per the CH32V00x reference manual V1.5, chapter 18. The V006 fast page is
 # 256 bytes (the CH32V003's is 64): fast erase (FTER) and fast programming
 # (FTPG, through a 256-byte page buffer) both work on whole pages and need
@@ -64,11 +64,11 @@
 .equ FLASH_PAGE, 256            # fast page size in bytes
 
 ##
-# Boot-replay skip button - CH32V006 PORT
+# Skip button - CH32V006 PORT
 # PD4 is configured as an input with pull-down; holding it HIGH (button to
-# 3V3) during reset skips the source-replay and boots to a bare ok prompt.
+# 3V3) during reset keeps line 0 from loading and boots to a bare ok prompt.
 # Active-high so that an unwired pin (and the emulator's all-zero GPIO
-# reads) means "replay normally". gpio_init samples it with PD5 driven low:
+# reads) means "load line 0". gpio_init samples it with PD5 driven low:
 # on the WeAct board the closed solder bridges SB3/SB4 join PD4 to PD5, and
 # PD5 is otherwise high (idle UART TX, or the WCH-LinkE's RX pull-up).
 ##
@@ -201,13 +201,13 @@ uart_done:
 # Initialize the GPIO
 # (CH32V006 PORT: USART1 default mapping is TX = PD5, RX = PD6, i.e. port D
 # CFGLR nibbles 5 and 6, instead of the GD32V's PA9/PA10 in CTL1)
-# returns: a0 = replay-skip button (0 = released, SKIP_BIT = held)
+# returns: a0 = skip button (0 = released, SKIP_BIT = held)
 # clobbers: t0, t1, t2, a1, a2
 gpio_init:
     li t0, 0x40011400                       # load base address of GPIOD
     lw t1, 0x00(t0)                         # load value from the Port config register low (GPIOD_CFGLR)
 
-    # CH32V006 PORT: sample the replay-skip button (PD4) with PD5 driven low.
+    # CH32V006 PORT: sample the skip button (PD4) with PD5 driven low.
     # On the WeAct board the closed solder bridges SB3/SB4 join PD4 to PD5
     # (through USB D-, 33 R + 1.5 k). As the UART TX, PD5 idles high; released
     # as an input, it is still pulled high by the WCH-LinkE's RX. Either way

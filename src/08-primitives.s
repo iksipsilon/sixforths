@@ -6,8 +6,8 @@
 # parsing, compiler and dictionary, input and output, system). It merges
 # upstream's 08-forth-primitives.s with the port's eForth-style and ANS-style
 # additions. The dictionary is chained in file order and searched from the
-# end, so a word near the end of this file is found fastest. The log words
-# (+log -log wipe) live with their machinery in 12-flash.s.
+# end, so a word near the end of this file is found fastest. The words for the lines in
+# flash (line p load wipe) live with their machinery in 12-flash.s.
 #
 # Registers: s0 = DSP (data stack), tp = RSP (return stack), s1 = IP,
 # a0 = W (NEXT hands W to the code-field routine like an argument). sp is the
@@ -1376,8 +1376,8 @@ words_done:
 # The same name can so mean different things in different vocabularies, which
 # is what the phone uses for its modes (the same key does something else while
 # dialling, in a call, in the editor). The key handler should not switch
-# CONTEXT for that, since CONTEXT also decides what the console and the log
-# replay find: keep the mode in a variable of its own and look bindings up
+# CONTEXT for that, since CONTEXT also decides what the console and the
+# loaded lines find: keep the mode in a variable of its own and look bindings up
 # with find-name-in.
 # Any error puts CONTEXT and CURRENT back to FORTH (see reset).
 ##
@@ -1504,9 +1504,9 @@ defcode "key",3,,KEY
     NEXT
 
 # key? ( -- f )         True if the input source has a character waiting.
-# The console's looks at the hardware only: during the boot replay `key` is
-# served from the flash log instead, so do not call key or key? from
-# replayed lines.
+# The console's looks at the hardware only: while lines are loaded `key` is
+# served from the flash instead, so do not call key or key? from
+# loaded lines.
 defcode "key?",4,,KEYQ
     li t0, var_IN
     lw t0, 0(t0)        # the input table

@@ -76,7 +76,7 @@ _start:
 .include "08-primitives.s"        # every machine-code word, sorted by function (CH32V006 port)
 .include "09-interpreter.s"
 .include "10-forth-words.s"       # colon words kept in flash as threads (CH32V006 port)
-.include "12-flash.s"             # source-replay log: flash persistence (CH32V006 port)
+.include "12-flash.s"             # flash: source lines (line p load wipe) and user pages (CH32V006 port)
 .include "13-ticks.s"             # ticks and ms: the SysTick counter (CH32V006 port)
 .include "14-modem.s"             # mkey? mkey memit mtimeout >modem <modem: USART2 + DMA ring (CH32V006 port)
 

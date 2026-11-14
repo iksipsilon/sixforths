@@ -106,7 +106,7 @@ console_ready:
     ret
 
 # the console as an input source for var_IN: get (uart_get, which serves the
-# boot replay from the log too), ready
+# lines loaded from flash too), ready
 .balign CELL
 in_console:
     .word uart_get, console_ready

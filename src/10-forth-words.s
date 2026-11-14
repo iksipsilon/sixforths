@@ -2,7 +2,7 @@
 # Forth words: colon definitions that live in flash (CH32V006 port)
 #
 # These are the words of the former prelude.f. They used to be typed (or
-# replayed from the log) into RAM at every boot, where they took about 2.8 KB
+# loaded from flash) into RAM at every boot, where they took about 2.8 KB
 # of the 6.9 KB dictionary. Here each one is the same thread the compiler
 # would build, written out by hand with defword: a list of code field
 # addresses, 4 bytes per word called. The Forth source is the comment above

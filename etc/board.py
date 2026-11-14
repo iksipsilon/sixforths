@@ -10,7 +10,7 @@ anything that writes flash needs the owner's go-ahead first (CLAUDE.md rule 3).
     python3 etc/board.py reset                      hardware reset (minichlink -b), print the boot
     python3 etc/board.py flash                      minichlink -w sixforths.bin flash -b, print the boot
     python3 etc/board.py flash-and-wipe             the same, then send `wipe` as the very first
-                                                    line (erases the log: only with consent)
+                                                    line (erases the source lines: only with consent)
 
 Each character waits for its echo before the next one goes out (the board's
 receiver holds only 1-2 bytes, and the board does not read the UART while it
@@ -72,7 +72,7 @@ def send_line(s, line, total=60.0):
             out += c
             last = time.time()
         if REBOOTING in out:
-            out += drain(s, idle=1.5, total=30.0)    # the banner, and any log replay
+            out += drain(s, idle=1.5, total=30.0)    # the banner, and what line 0 loads
             break
         if DONE.search(out):
             break

@@ -56,17 +56,17 @@ RAM is the scarce resource, not flash.
 
 | Flash | Size | Use |
 |---|---|---|
-| 0x0000-0x3FFF | 16 KiB | kernel (13,596 bytes used, 2026-11-12) |
-| 0x4000-0x67FF | 10 KiB | source-replay log |
+| 0x0000-0x3FFF | 16 KiB | kernel (13,580 bytes used, 2026-11-14) |
+| 0x4000-0x67FF | 10 KiB | 160 source lines of 64 bytes (`p` `list` `load`; line 0 runs at boot) |
 | 0x6800-0xF7FF | 36 KiB | user flash: application data |
 
 - The phonebook and the SMS stay on the SIM for now, so the 36 KiB are free. They may
   move to the user flash or the SD card later, depending on how much the SIM holds
   (section 9).
-- RAM dictionary: 6,288 bytes (2026-11-14), **empty after boot** now that the prelude
+- RAM dictionary: 6,296 bytes (2026-11-14), **empty after boot** now that the prelude
   lives in flash (it used to take about 2.8 KiB at every boot). The modem line (160
   bytes) and the display frame (40) are already taken out of it. The SMS editor uses
-  `PAD` and the call log stages its page in `LOGBUF`, so neither needs a buffer. SD sector
+  `PAD` and the call log stages its page in `PAGEBUF`, so neither needs a buffer. SD sector
   buffers (512 bytes each) are left out for now.
 - Glyph table for the 3x5 font: 15 bits per glyph, so one halfword each; 95 ASCII glyphs
   are 190 bytes of kernel `.rodata`. No flash region needed. *(plan)*
@@ -99,7 +99,7 @@ with a different test:
    the last 8 digits of the number. `+385 9x ...` and `09x ...` then match;
 3. missed: incoming and not answered.
 
-Appending rewrites one page, like `log_commit` does. A page erase takes 3 ms and the
+Appending rewrites one page, like `p` does for a source line. A page erase takes 3 ms and the
 datasheet promises at least 100,000 cycles, so wear is not a concern.
 
 ### SMS of one contact in one place *(plan)*
@@ -166,7 +166,7 @@ In the kernel now:
 Plan for the phone:
 - One vocabulary per mode (idle, dial, call, edit, ...).
 - **The UI mode is a variable of its own, not CONTEXT.** CONTEXT also decides what the
-  console and the log replay find; a `RING` that switched it would change what a typed
+  console and the loaded lines find; a `RING` that switched it would change what a typed
   line means.
 - The key handler builds a name from the key mask (`k13` for keys 1 and 3), looks it up
   in the mode's vocabulary with `find-name-in`, then in a common one.
@@ -230,7 +230,7 @@ One of each and no more:
 ## 9. Not checked by anyone yet
 
 - The whole branch on the real chip: phase 2 steps 1 to 5a passed there on 2026-11-12
-  (`CLAUDE.md`); `fpage-prog` and the log-full path have not run there yet.
+  (`CLAUDE.md`); `fpage-prog` and the source lines have not run there yet.
 - ~~Whether the DMA keeps storing bytes while a flash page is erased.~~ It does (checked
   2026-11-12 with USART1 and DMA channel 5, see phase 2 step 3 in `CLAUDE.md`), so the
   call log may be written while the modem talks. Page programming was not tried.

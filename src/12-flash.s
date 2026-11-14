@@ -243,7 +243,7 @@ wipe_done:
     NEXT
 
 ##
-# Flash page words for the application's data (above the log)
+# Flash page words for the application's data (above the lines)
 ##
 
 .balign CELL

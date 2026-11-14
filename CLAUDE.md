@@ -37,8 +37,8 @@ hardware.
   the table extended to its number. **Never tell
   reset from a trap by `mcause`: on silicon it is not 0 after reset** (read 0x800000D9).
   Do not put a `.balign 1024` back; it cost ~1.6 KB of padding. If the board prints that, the code did something illegal at that address.
-- Holding **PD4 high at reset skips the source-replay log** (see below). This is the
-  recovery switch if a bad log line stops the board booting. On the owner's WeAct board
+- Holding **PD4 high at reset keeps line 0 from loading** (see "Source lines in flash"
+  below). This is the recovery switch if a bad line 0 stops the board booting. On the owner's WeAct board
   the closed solder bridges SB3/SB4 join PD4 to PD5 (UART TX). PD5 is high as the TX
   and also when released (the WCH-LinkE's RX pulls it up), so `gpio_init` samples PD4
   with PD5 driven low for only ~0.5 us (7 instructions; a ~3 us pulse showed up as a
@@ -110,29 +110,31 @@ hardware.
 
 - Flash 0x00000000: kernel + `.rodata`, **must stay under 16 KiB** (`FLASH` `LENGTH` in
   `linker.ld` at the repo root; confirm it says 16k).
-  Currently 13,728 bytes (182 words). Report the size after every change.
-- Flash 0x08004000-0x08006800: source-replay log (10 KiB).
+  Currently 13,580 bytes (184 words). Report the size after every change.
+- Flash 0x08004000-0x08006800 (`LINES_BASE`..`LINES_TOP`, 10 KiB): 160 source lines of
+  64 bytes (see "Source lines in flash").
 - Flash 0x08006800-0x0800F800 (`USER_FLASH`..`FLASH_TOP`, 36 KiB): the application's own
   data, written a 256-byte page at a time with `fpage-erase ( page -- )` and
   `fpage-prog ( src page -- )`. Both words refuse any other address, so they cannot damage
-  the kernel or the log. Planned use: the call log in the top 4 KiB (0x0800E800-0x0800F7FF,
+  the kernel or the source lines. Planned use: the call log in the top 4 KiB (0x0800E800-0x0800F7FF,
   see `etc/answers.md`). The phonebook and the SMS stay on the SIM for now; they may move
   to the user flash or the SD card later, depending on how much the SIM holds (not known
   yet, see `etc/answers.md` section 9).
 - RAM 0x20000000: the user dictionary grows up from here (`HERE`). It is **empty after
   boot**: every kernel word lives in flash.
-  `FORTH_SIZE` = 0x1890 = **6,288 bytes** of dictionary budget, up to `DICT_TOP` (which is
+  `FORTH_SIZE` = 0x1898 = **6,296 bytes** of dictionary budget, up to `DICT_TOP` (which is
   `FRAME` now).
 - RAM, top down (changed 2026-11-14: the variables moved above the machine stack):
   `DSP_TOP` 0x20002000 (the data stack, 64 cells), `RSP_TOP` 0x20001F00,
-  `TIB_TOP` 0x20001E00, `TIB_BOTTOM` 0x20001D00 (256 B), then the 18 variable cells:
+  `TIB_TOP` 0x20001E00, `TIB_BOTTOM` 0x20001D00 (256 B), then the 16 variable cells:
   `var_STATE` 0x20001CFC, `var_TOIN` 0x20001CF8, `var_HERE` 0x20001CF4, `var_LATEST`
-  0x20001CF0, then log bookkeeping, `var_BASE` 0x20001CDC, `var_HLD`, `var_CONTEXT`,
-  `var_CURRENT`, `var_VOCLINK` 0x20001CCC, `var_MRD`, `var_MTIMEOUT` 0x20001CC4, `var_OUT`,
-  `var_IN` 0x20001CBC (the I/O vectors), `var_IRQS` 0x20001CB8 = `MSP_TOP` (the machine
-  stack, 96 bytes, down to `MSP_BOTTOM` 0x20001C58), `PAD` 0x20001B58, `LOGBUF` 0x20001A58,
-  `MRING` 0x20001958 (the modem's 256-byte receive ring), `MLINE` 0x200018B8 (160 B, one
-  line of the modem's answer) and `FRAME` 0x20001890 (40 B, the display's pixels: 5 rows
+  0x20001CF0, `var_SRC` and `var_SRCEND` (the lines being loaded), `var_BASE` 0x20001CE4,
+  `var_HLD`, `var_CONTEXT`, `var_CURRENT`, `var_VOCLINK` 0x20001CD4, `var_MRD`,
+  `var_MTIMEOUT` 0x20001CCC, `var_OUT`, `var_IN` 0x20001CC4 (the I/O vectors), `var_IRQS`
+  0x20001CC0 = `MSP_TOP` (the machine stack, 96 bytes, down to `MSP_BOTTOM` 0x20001C60),
+  `PAD` 0x20001B60, `PAGEBUF` 0x20001A60 (one flash page), `MRING` 0x20001960 (the modem's
+  256-byte receive ring), `MLINE` 0x200018C0 (160 B, one line of the modem's answer) and
+  `FRAME` 0x20001898 (40 B, the display's pixels: 5 rows
   of 2 cells) = `DICT_TOP`. `MLINE` and `FRAME` are reserved; no code uses them yet.
   RAM-variable cells are named `var_X` as in jonesforth, so the bare names
   stay free for word labels; `TIB_BOTTOM` is the start of the input buffer.
@@ -143,8 +145,7 @@ hardware.
   `DICT_TOP`. Each buffer shrinks `FORTH_SIZE`.
 - Planned sharing, so that no more buffers are needed: the SMS being written lives in
   `PAD` (256 B, one flash page; the kernel only builds numbers below `pad+128`), and a
-  call-log page is staged in `LOGBUF`, which is in use only between the lines of a
-  definition typed with `+log` on.
+  call-log page is staged in `PAGEBUF`, which `p` uses only while it runs.
 
 ## REPL quirks (they affect how tests and prelude files must be written)
 
@@ -159,18 +160,31 @@ hardware.
   only 1-2 bytes). Anything that feeds the board automatically must wait for the echo
   or prompt after each line.
 
-## Source-replay log
+## Source lines in flash
 
-`+log` / `-log` turn logging on and off, `wipe` erases it. Successful input lines are
-appended to flash and replayed at boot. A line that errors abandons the replay.
-Definitions are batched atomically in `LOGBUF`.
+This replaced the source-replay log on 2026-11-14 (the owner found the appending log too
+complex; nothing is saved automatically any more). Flash holds 160 numbered lines. Each
+has a 64-byte slot: the text (up to 63 characters), a newline, then unused bytes that stay
+0xFF. A slot that was never written is all 0xFF and counts as an empty line.
 
-An append rewrites each 256-byte page it touches (`log_commit` in `src/12-flash-log.s`):
-copy the page into the TIB (free at commit time), merge the new bytes, erase the page
-unless it reads all 0xFF, program it with `fpage_prog`, read it back (a mismatch prints
-`? log off`). A power cut between erase and program loses that page's earlier lines;
-replay then stops there (PD4 skips it). Logged lines end with " \n" (the newline became
-a space) and batches are padded to even length for `log_scan`.
+- `n p text` puts the rest of the input line into line n, in flash at once (`20 p : sq dup * ;`).
+  It copies the line's page (4 lines) to `PAGEBUF`, rebuilds the slot, erases the page,
+  programs it and reads it back (`? flash` if that differs). It prints `?` and writes
+  nothing if n is not 0-159 or the text is over 63 characters. `n p` alone empties a line.
+- `a b list` prints lines a to b with their numbers.
+- `a b load` interprets lines a to b as if typed (they echo, each gets its `ok`). The
+  lines are read once the current input line is finished, so **`load` goes last on its
+  line**; a `load` in a loaded line replaces the range and does not come back. An error
+  in a loaded line abandons the rest.
+- `n line` gives the slot's address. `wipe` erases all 160 lines.
+- **Line 0 is interpreted at boot** unless PD4 is held. It usually holds a `load`.
+- Comments never reach a line (the REPL swallows them first). The master copy of the
+  source is a file on the PC; `awk '{ print NR+3, "p", $0 }' file.f` numbers it from line 4.
+- Inside: `uart_get` (`04-io-helpers.s`) takes its bytes from `var_SRC` up to `var_SRCEND`
+  while `var_SRC` is not 0, skipping 0xFF; `reset` clears it. `fpage-erase` / `fpage-prog`
+  still refuse the lines, and `p` refuses everything else.
+- A power cut between erase and program loses the 4 lines of that page; the other pages
+  still load.
 
 ## Build, test, flash
 
@@ -196,7 +210,7 @@ The two maps are needed: the board ends its lines with LF only, and it ignores C
 so Enter (CR) must be sent as LF. `make term` runs the same picocom command. To send a
 Forth source file, press Ctrl-A Ctrl-S and give its name: ascii-xfr sends one line, then
 waits 100 ms (the board does not read the UART while it processes a line). What it
-defines lives in RAM, so a reset loses it unless `+log` was on.
+defines lives in RAM, so a reset loses it; lines put with `p` stay in flash.
 
 Layout:
 - `sixforths.s` (repo root) is the top-level file. It includes `src/mcu.s`, then
@@ -219,7 +233,8 @@ Layout:
 - Machine code or thread? Byte loops and stack shuffling are shorter and faster in machine
   code (`type`: 32 bytes against 64); words that mostly call other words are shorter and
   safer as threads.
-- `src/12-flash-log.s` holds the source log and the user flash page words.
+- `src/12-flash.s` holds the FPEC routines, the source lines (`line` `p` `load` `wipe`;
+  `list` is a thread in `10-forth-words.s`) and the user flash page words.
 - `src/13-ticks.s` holds `ticks` and `ms` (SysTick, polled), the tick interrupt `tick_isr`
   and `irqs`.
 - `src/14-modem.s` holds the modem UART: USART2 received by DMA into `MRING`, and the
@@ -229,8 +244,8 @@ Layout:
   `../sixforths.bin` in it), `test_fotrh.py` (the tests; it loads `../prelude.f`) and
   `check_threads.py`. Tests must pass before a change is called done.
 - `prelude.f` (repo root) is the place for Forth words that are still being developed. It
-  is empty now: its 57 words moved into flash. A word tried out there (or at the console
-  with `+log`) is moved into `08-primitives.s` or `10-forth-words.s` once it is stable.
+  is empty now: its 57 words moved into flash. A word tried out there (or kept in
+  the flash lines with `p`) is moved into `08-primitives.s` or `10-forth-words.s` once it is stable.
 - `etc/board.py` talks to the board over the UART for hardware tests (see Phase 2).
 - `etc/answers.md` holds the design decisions behind the kernel layout and the plan for the
   phone (registers, flash, call log format, vocabularies, key input). Read it before
@@ -249,13 +264,13 @@ Layout:
 2. Add a test in `emulators/test_fotrh.py` for every new word, including edge cases (negative
    numbers, zero, overflow, divide by zero, overlapping `move`).
 3. **Never flash, wipe, or erase flash without asking first.** Before anything that
-   writes the log region, read it back and tell the owner what is there. Explain in
+   writes the source lines, read them back and tell the owner what is there. Explain in
    one sentence what the command will do to the board.
 4. Hardware tests over UART: sync on the echo after every line, and wait for `ok` or `?`
    rather than for a pause (a line like `5000 ms` prints nothing for seconds, and the
    board does not read the UART meanwhile); save and restore
    `here` / `latest`; run the Forth words `s0 sp!` between tests (the Forth word `s0` = data-stack base; the
-   register `s0` is the data stack pointer); start from a known state (log wiped
+   register `s0` is the data stack pointer); start from a known state (lines wiped
    or PD4 held); treat a `T<mcause> <mepc>` line as a failed test, then reset the chip
    with minichlink.
 5. Work on a feature branch (the current one is `kernel-phase1`, cut from
@@ -277,8 +292,11 @@ error recovery by the hidden flag, vocabularies. `fpage-erase` ran on the board 
 experiment; `fpage-prog` has not run there yet.
 
 Still open from before:
-- The log-full path has not been tested on the board. Note the log starts with `+log`, so
-  every boot turns logging on again and every typed line is saved; `-log` is not logged.
+- The source lines (`p` `list` `load`, line 0 at boot) are tested in the emulator only:
+  **not flashed yet**. To check on the board: put, list and load two lines; line 0 after
+  `reboot` and after a hardware reset; change one line and see its page neighbours intact;
+  a bad line 0 prints `?` and gives the prompt; PD4 held loads nothing; `irqs` around ten
+  `p`; the time of one `p`; `wipe` and a read-back.
 - A pyserial backend for `emulators/test_fotrh.py`, so the same tests run against the real
   board (and against the emulator through a fake port).
 - Optional: `?do`.
@@ -293,14 +311,14 @@ take more than a month.
   `sp!` / `rp!` prints `?`, `memit` / `mkey` and `>modem` through the D2-D3 wire, a
   vocabulary, and a `+log` round trip (a one-line and a two-line definition replayed after
   `reboot` and after a hardware reset, then `wipe`; the read-back showed the kernel equal
-  to `sixforths.bin` and the log empty). The RAM map changed after that commit (variables
-  above the machine stack, `MLINE`, `FRAME`; same 13,728 bytes); that kernel is tested in
-  the emulator only and is **not flashed yet**.
+  to `sixforths.bin` and the log empty). That kernel still has the source-replay log
+  (`+log` `-log`). Since then the RAM map changed and the log was replaced by the source
+  lines (13,580 bytes); that kernel is tested in the emulator only and is **not flashed yet**.
   Checked: boot, an error with 3 cells on the stack and one inside
   a definition (both leave `depth` 0), 40 cells through 1000 ms of ticks (500 ticks, the
   sum intact), `reboot`. Flashing printed one stray byte before the banner; a plain
-  `minichlink -b` reset did not. Its source log is empty, so
-  logging is off at boot, and the user flash is empty. A wire joins D2 and D3 (the USART2
+  `minichlink -b` reset did not. Its log region is empty (so line 0
+  of the new kernel will be empty too), and the user flash is empty. A wire joins D2 and D3 (the USART2
   loopback; D2 is driven as an output at every boot) and the board's USB-C socket is
   unplugged. Nothing else is connected.
 - Next: 5b (the LED rows in the tick) once the matrix is wired, then 5c (the keys). Ask
@@ -346,7 +364,7 @@ labels them D1 ... D6; its schematic is `docs/ch32v006/CH32V00xFxUx_Pinout.pdf`)
 | PD1 | 15 | SWIO, the debug pin minichlink uses |
 | PD2 | 16 | USART2 TX, to the modem's RX |
 | PD3 | 17 | USART2 RX, from the modem's TX (pull-up). WeAct solder bridge SB2 joins it to the USB-C D+ line (33 Ω): keep the board's USB-C socket unplugged |
-| PD4 | 18 | replay-skip button (high at reset); joined to PD5 by SB3/SB4 on the WeAct board |
+| PD4 | 18 | skip button (high at reset: line 0 is not loaded); joined to PD5 by SB3/SB4 on the WeAct board |
 | PD5 | 19 | USART1 TX, the console |
 | PD6 | 20 | USART1 RX, the console |
 
@@ -359,9 +377,9 @@ The steps:
    forth definitions edit k3 forth`, and a `+log` / reset / replay round trip.
    **Done 2026-11-12**: all passed, the replay after `reboot` and after `minichlink -b`
    matched the emulator byte for byte, and the board's log is wiped again. Learned:
-   `minichlink -w` rewrites only the pages it writes, so **the log survives a kernel
-   reflash** and replays on the new kernel's first boot (send `wipe` as the first line, or
-   hold PD4, when the old log does not suit the new kernel). It also keeps the old bytes
+   `minichlink -w` rewrites only the pages it writes, so **the lines region survives a kernel
+   reflash** and line 0 loads on the new kernel's first boot (send `wipe` as the first line, or
+   hold PD4, when the old contents do not suit the new kernel). It also keeps the old bytes
    after the end of the image in the last page it writes: after `3b085aa` (4 bytes shorter
    than `a042149`) the old kernel's last 4 bytes stayed at 0x3518 (read back 2026-11-14).
    Do not assume the flash after the kernel is erased. minichlink sometimes prints
@@ -433,11 +451,11 @@ The steps:
    nothing is connected to USART1, so an error must not fall back to the console REPL (the
    owner, 2026-11-12). `reset` restarts the word held in a RAM cell instead: the REPL by
    default (developing, with a PC attached), or the phone's main loop, which puts itself
-   there when it starts (from the last line of the log). That word sets the vectors it
+   there when it starts (from line 0, or from the lines it loads). That word sets the vectors it
    needs and shows the error, kept in RAM by the error path: the REPL on the console as
    now, the phone on the LED matrix (for example `?` and the word's name), cleared with a
    key. A trap still sends `T<mcause> <mepc>` to the console; on the phone it then resets
    the chip (later through the watchdog) instead of hanging. A restart word that fails at
-   once would restart forever: a hardware reset clears the RAM cell, and PD4 skips a log
+   once would restart forever: a hardware reset clears the RAM cell, and PD4 skips the line 0
    that sets it again. A REPL on the matrix and the 8 keys is possible later, but slow.
 8. **Call log** in the user flash, 16-byte records (format in `etc/answers.md`).
