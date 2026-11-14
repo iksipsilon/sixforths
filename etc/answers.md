@@ -63,9 +63,11 @@ RAM is the scarce resource, not flash.
 - The phonebook and the SMS stay on the SIM for now, so the 36 KiB are free. They may
   move to the user flash or the SD card later, depending on how much the SIM holds
   (section 9).
-- RAM dictionary: 6,856 bytes, **empty after boot** now that the prelude lives in flash
-  (it used to take about 2.8 KiB at every boot). Buffers for the modem line, the SMS
-  editor and two SD sectors will take roughly 1.5 KiB of it (estimate).
+- RAM dictionary: 6,288 bytes (2026-11-14), **empty after boot** now that the prelude
+  lives in flash (it used to take about 2.8 KiB at every boot). The modem line (160
+  bytes) and the display frame (40) are already taken out of it. The SMS editor uses
+  `PAD` and the call log stages its page in `LOGBUF`, so neither needs a buffer. SD sector
+  buffers (512 bytes each) are left out for now.
 - Glyph table for the 3x5 font: 15 bits per glyph, so one halfword each; 95 ASCII glyphs
   are 190 bytes of kernel `.rodata`. No flash region needed. *(plan)*
 - The key-to-AT-command code is ordinary kernel code. *(plan)*

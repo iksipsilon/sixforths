@@ -59,8 +59,9 @@ hardware.
   `or` / `xor` / `sub` and `beqz` / `bnez` only take `s0`, `s1`, `a0-a5`, for both
   registers. **`t0` is clobbered by PUSH / PUSHRSP / POPRSP / checkunderflow** (not by
   POP). **NEXT clobbers `a5`.** `ra` is for `call` / `ret` only.
-- The machine stack is 96 bytes (`MSTACK_SIZE`: one frame + 12 cells), under the TIB;
-  `boot` and `reset` empty it (`li t0, MSP_TOP` / `mv sp, t0`: `sp` gets its value
+- The machine stack is 96 bytes (`MSTACK_SIZE`: one frame + 12 cells), under the
+  variables and above `PAD` (nothing checks `sp` on the chip: an overrun now lands in
+  scratch, not in STATE / HERE / LATEST); `boot` and `reset` empty it (`li t0, MSP_TOP` / `mv sp, t0`: `sp` gets its value
   in one instruction). A primitive must leave `sp` as it found it; a jump to an `err_*`
   label from inside a subroutine is fine, because `reset` empties the stack. Interrupts
   must not nest. PUSH and PUSHRSP move the pointer first, then store, so to push `s0`
@@ -120,22 +121,30 @@ hardware.
   yet, see `etc/answers.md` section 9).
 - RAM 0x20000000: the user dictionary grows up from here (`HERE`). It is **empty after
   boot**: every kernel word lives in flash.
-  `FORTH_SIZE` = 0x1954 = **6,484 bytes** of dictionary budget, up to `DICT_TOP` (which is
-  `MRING` now).
-- RAM, top down: `DSP_TOP` 0x20002000 (the data stack, 64 cells), `RSP_TOP` 0x20001F00,
-  `TIB_TOP` 0x20001E00, `TIB_BOTTOM` 0x20001D00 (256 B) = `MSP_TOP` (the machine stack,
-  96 bytes, down to `MSP_BOTTOM` 0x20001CA0), `var_STATE` 0x20001C9C, `var_TOIN` 0x20001C98,
-  `var_HERE` 0x20001C94, `var_LATEST` 0x20001C90, then log bookkeeping, `var_BASE`
-  0x20001C78, `var_HLD`, `var_CONTEXT`, `var_CURRENT`, `var_VOCLINK` 0x20001C68, `var_MRD`,
-  `var_MTIMEOUT` 0x20001C60, `var_OUT`, `var_IN` 0x20001C58 (the I/O vectors), `var_IRQS`
-  0x20001C54, `PAD` 0x20001B54, `LOGBUF` 0x20001A54, `MRING` 0x20001954 (the modem's
-  256-byte receive ring)
-  = `DICT_TOP`. RAM-variable cells are named `var_X` as in jonesforth, so the bare names
+  `FORTH_SIZE` = 0x1890 = **6,288 bytes** of dictionary budget, up to `DICT_TOP` (which is
+  `FRAME` now).
+- RAM, top down (changed 2026-11-14: the variables moved above the machine stack):
+  `DSP_TOP` 0x20002000 (the data stack, 64 cells), `RSP_TOP` 0x20001F00,
+  `TIB_TOP` 0x20001E00, `TIB_BOTTOM` 0x20001D00 (256 B), then the 18 variable cells:
+  `var_STATE` 0x20001CFC, `var_TOIN` 0x20001CF8, `var_HERE` 0x20001CF4, `var_LATEST`
+  0x20001CF0, then log bookkeeping, `var_BASE` 0x20001CDC, `var_HLD`, `var_CONTEXT`,
+  `var_CURRENT`, `var_VOCLINK` 0x20001CCC, `var_MRD`, `var_MTIMEOUT` 0x20001CC4, `var_OUT`,
+  `var_IN` 0x20001CBC (the I/O vectors), `var_IRQS` 0x20001CB8 = `MSP_TOP` (the machine
+  stack, 96 bytes, down to `MSP_BOTTOM` 0x20001C58), `PAD` 0x20001B58, `LOGBUF` 0x20001A58,
+  `MRING` 0x20001958 (the modem's 256-byte receive ring), `MLINE` 0x200018B8 (160 B, one
+  line of the modem's answer) and `FRAME` 0x20001890 (40 B, the display's pixels: 5 rows
+  of 2 cells) = `DICT_TOP`. `MLINE` and `FRAME` are reserved; no code uses them yet.
+  RAM-variable cells are named `var_X` as in jonesforth, so the bare names
   stay free for word labels; `TIB_BOTTOM` is the start of the input buffer.
-  New buffers (modem line, display frame, SD sectors) are carved out below the lowest one
-  the same way, in `01-variables-constants.s`, and `DICT_TOP` moves down to the new one:
-  every dictionary bounds check and the error path's zero-fill stop at `DICT_TOP`. Each
-  buffer shrinks `FORTH_SIZE`.
+  **A new variable** goes at the end of the variable list and `MSP_TOP` is set to it (the
+  "RAM map" test fails if that is forgotten). **A new buffer** (SD sectors; left out for
+  now) is carved out below the lowest one in `01-variables-constants.s`, and `DICT_TOP`
+  moves down to it: every dictionary bounds check and the error path's zero-fill stop at
+  `DICT_TOP`. Each buffer shrinks `FORTH_SIZE`.
+- Planned sharing, so that no more buffers are needed: the SMS being written lives in
+  `PAD` (256 B, one flash page; the kernel only builds numbers below `pad+128`), and a
+  call-log page is staged in `LOGBUF`, which is in use only between the lines of a
+  definition typed with `+log` on.
 
 ## REPL quirks (they affect how tests and prelude files must be written)
 
@@ -284,7 +293,9 @@ take more than a month.
   `sp!` / `rp!` prints `?`, `memit` / `mkey` and `>modem` through the D2-D3 wire, a
   vocabulary, and a `+log` round trip (a one-line and a two-line definition replayed after
   `reboot` and after a hardware reset, then `wipe`; the read-back showed the kernel equal
-  to `sixforths.bin` and the log empty).
+  to `sixforths.bin` and the log empty). The RAM map changed after that commit (variables
+  above the machine stack, `MLINE`, `FRAME`; same 13,728 bytes); that kernel is tested in
+  the emulator only and is **not flashed yet**.
   Checked: boot, an error with 3 cells on the stack and one inside
   a definition (both leave `depth` 0), 40 cells through 1000 ms of ticks (500 ticks, the
   sum intact), `reboot`. Flashing printed one stray byte before the banner; a plain
