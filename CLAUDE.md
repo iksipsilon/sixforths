@@ -278,11 +278,13 @@ Still open from before:
 
 **Where we stopped (2026-11-12): waiting for the display and key hardware**, which may
 take more than a month.
-- **Not flashed yet (2026-11-14):** the kernel with the machine stack on `sp` (`s0` = DSP,
-  `tp` = RSP; 13,728 bytes) passes in the emulator only. On the board, repeat the checks
-  listed below, plus `0 rp! nosuchword` (must print `?`, not a `T...` line).
-- The board runs commit `3b085aa` (13,592 bytes; flashed 2026-11-14: `sp` was still the
-  data stack there). Checked there: boot, an error with 3 cells on the stack and one inside
+- The board runs commit `40d7cf6` (13,728 bytes; flashed 2026-11-14: the machine stack on
+  `sp`, `s0` = DSP, `tp` = RSP). Checked there besides the list that follows: `/mod` `/`
+  `mod`, 64 cells fit and the 65th overflows, `0 rp! nosuchword` prints `?`, a wrong
+  `sp!` / `rp!` prints `?`, `memit` / `mkey` and `>modem` through the D2-D3 wire, a
+  vocabulary. Not run there: a log write (`+log`) with this kernel, whose `log_commit`
+  now keeps its frontier on the machine stack (emulator only so far).
+  Checked: boot, an error with 3 cells on the stack and one inside
   a definition (both leave `depth` 0), 40 cells through 1000 ms of ticks (500 ticks, the
   sum intact), `reboot`. Flashing printed one stray byte before the banner; a plain
   `minichlink -b` reset did not. Its source log is empty, so
