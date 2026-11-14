@@ -31,6 +31,23 @@ t0 = time.time()
 B0 = h.boot()
 print("boot banner ok:", "sixforths v0.0" in bytes(B0.uart_out).decode("latin1"), "fault:", B0.fault)
 
+# ---- RAM map (01-variables-constants.s): the blocks follow each other with no gap and no overlap ----
+S = h.SYM
+a, gaps = S["DICT_TOP"], []
+for name, size in (("FRAME", "FRAME_SIZE"), ("MLINE", "MLINE_SIZE"), ("MRING", "MRING_SIZE"),
+                   ("LOGBUF", "LOGBUF_SIZE"), ("PAD", "PAD_SIZE"), ("MSP_BOTTOM", "MSTACK_SIZE")):
+    if S[name] != a or a % 4:
+        gaps.append(name)
+    a += S[size]
+# the variables: every cell from the top of the machine stack up to the TIB, each used once.
+# A variable added without moving MSP_TOP would lie inside the machine stack and fail here.
+cells = sorted(v for k, v in S.items() if k.startswith("var_") or k in ("LOGEN", "LOGPND", "LOGSRC", "LOGEND"))
+check("RAM map: dictionary, buffers, machine stack, variables, TIB and stacks fill the RAM exactly", B0,
+      f"gaps={gaps} stack_top={a == S['MSP_TOP']} cells={cells == list(range(S['MSP_TOP'], S['TIB_BOTTOM'], 4))} "
+      f"dict={S['FORTH_SIZE'] == S['DICT_TOP'] - S['RAM_BASE']} "
+      f"top={S['TIB_BOTTOM'] + 3 * 256 == S['DSP_TOP'] == S['RAM_BASE'] + S['RAM_SIZE']}",
+      ["gaps=[]", "stack_top=True", "cells=True", "dict=True", "top=True"])
+
 # ---- load the prelude line by line, flag any '?' ----
 lines = [l for l in open(os.path.join(HERE, "..", "prelude.f")).read().split("\n")]
 B = B0
