@@ -52,7 +52,7 @@ if bad:
     print("PRELUDE LOAD FAILED:")
     for b in bad: print("  ", b)
     sys.exit(1)
-print(f"prelude loaded in {time.time()-t0:.1f}s; HERE-RAM_BASE = {h.ram_word(E, 0x20001CF4) - 0x20000000} bytes of dictionary")
+print(f"prelude loaded in {time.time()-t0:.1f}s; HERE-RAM_BASE = {h.ram_word(E, h.SYM["var_HERE"]) - 0x20000000} bytes of dictionary")
 
 P = E  # prelude-loaded machine
 
@@ -88,9 +88,9 @@ t("?dup", "5 ?dup . . 0 ?dup .", "5 5 0 ")
 t("+!", "variable v 5 v ! 3 v +! v @ .", "8 ")
 t("depth and .s", "1 2 3 depth . .s", "3 1 2 3 ")
 
-# 38 loop results plus the two loop parameters of the second loop = 40 cells
-t("40 cells fit on the data stack", ": f40 38 0 do i loop 38 0 do drop loop 65 emit ; f40", "f40\nA")
-t("the 41st overflows", ": f41 39 0 do i loop 39 0 do drop loop 65 emit ; f41", "? stack overflow", absent=("f41\nA",))
+# 62 loop results plus the two loop parameters of the second loop = 64 cells
+t("64 cells fit on the data stack", ": f64 62 0 do i loop 62 0 do drop loop 65 emit ; f64", "f64\nA")
+t("the 65th overflows", ": f65 63 0 do i loop 63 0 do drop loop 65 emit ; f65", "? stack overflow", absent=("f65\nA",))
 t("sp@", "7 sp@ @ .", "7 ")
 
 # ---- memory ----
@@ -397,8 +397,8 @@ pending = e.stk_cntif
 e.csr[0x300] |= 8
 out, _ = h.feed(e, "irqs 20 ms irqs swap - dup 9 < . 11 > .\n")
 check("after a 30 ms stall the tick goes on", e, out + f" pending={pending}", ["\n0 0 ", "pending=1"])
-e, out, _ = h.session(P, ": deep 36 0 do i loop 20 ms 0 36 0 do swap 35 i - <> if 1+ then loop ; deep .\n")
-check("a 36-cell data stack survives 20 ms of ticks", e, out + f" enough={e.irqs_taken - P.irqs_taken >= 9}",
+e, out, _ = h.session(P, ": deep 40 0 do i loop 20 ms 0 40 0 do swap 39 i - <> if 1+ then loop ; deep .\n")
+check("a 40-cell data stack survives 20 ms of ticks", e, out + f" enough={e.irqs_taken - P.irqs_taken >= 9}",
       ["deep .\n0 ", "enough=True"])
 t("the tick runs after reboot", "reboot\nirqs 20 ms irqs swap - dup 9 < . 11 > .", "\n0 0 ")
 t("the tick runs after an error", "nosuchword\nirqs 20 ms irqs swap - dup 9 < . 11 > .", "\n0 0 ", absent=())

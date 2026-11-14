@@ -8,27 +8,27 @@
 # Memory map
 ##
 
-# The stacks and the TIB lie at the top of memory; the stacks grow downward.
-# CH32V006 PORT: the machine stack (register sp) lies under the data stack,
-# in the same STACK_SIZE bytes (so DSP_TOP stays a round address). With the
+# DSP, RSP, TIB stacks grow downward from the top of memory
+.equ DSP_TOP, RAM_BASE + RAM_SIZE       # address of top of data stack
+.equ RSP_TOP, DSP_TOP - STACK_SIZE      # address of top of return stack
+.equ TIB_TOP, RSP_TOP - STACK_SIZE      # address of top of terminal buffer
+.equ TIB_BOTTOM, TIB_TOP - STACK_SIZE   # address of bottom of terminal buffer
+
+# CH32V006 PORT: the machine stack (register sp), under the TIB. With the
 # hardware prologue/epilogue (HPE) on, the QingKe V2 saves ra, t0-t2 and a0-a5
 # (10 registers, 40 bytes) at sp-4 ... sp-40 when an interrupt or a trap is
 # taken, and moves sp down 48 bytes (processor manual 3.4, Table 3-3; the
 # manual does not say what the last 8 bytes are for). So sp is left to the
 # machine: interrupt frames and the return addresses of nested subroutines.
 # Forth's data stack has a register of its own (s0) and no interrupt writes
-# near it. MSTACK_SIZE = one frame (48) + 12 cells for subroutines. The data
-# stack holds (STACK_SIZE - MSTACK_SIZE) / CELL = 40 cells; PUSH stops it at
-# MSP_TOP.
+# near it. MSTACK_SIZE = one frame (48) + 12 cells for subroutines. The
+# variables follow below it.
 .equ MSTACK_SIZE, 96
-.equ DSP_TOP, RAM_BASE + RAM_SIZE       # address of top of data stack
-.equ RSP_TOP, DSP_TOP - STACK_SIZE      # address of top of return stack
-.equ MSP_TOP, RSP_TOP + MSTACK_SIZE     # address of top of machine stack
-.equ TIB_TOP, RSP_TOP - STACK_SIZE      # address of top of terminal buffer
-.equ TIB_BOTTOM, TIB_TOP - STACK_SIZE   # address of bottom of terminal buffer
+.equ MSP_TOP, TIB_BOTTOM                # address of top of machine stack
+.equ MSP_BOTTOM, MSP_TOP - MSTACK_SIZE  # its lowest address
 
 # variables
-.equ var_STATE, TIB_BOTTOM - CELL       # 1 CELL for STATE variable
+.equ var_STATE, MSP_BOTTOM - CELL       # 1 CELL for STATE variable
 .equ var_TOIN, var_STATE - CELL         # 1 CELL for TOIN variable (looks into TIB)
 .equ var_HERE, var_TOIN - CELL          # 1 CELL for HERE variable
 .equ var_LATEST, var_HERE - CELL        # 1 CELL for LATEST variable

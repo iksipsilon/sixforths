@@ -59,8 +59,8 @@ hardware.
   `or` / `xor` / `sub` and `beqz` / `bnez` only take `s0`, `s1`, `a0-a5`, for both
   registers. **`t0` is clobbered by PUSH / PUSHRSP / POPRSP / checkunderflow** (not by
   POP). **NEXT clobbers `a5`.** `ra` is for `call` / `ret` only.
-- The machine stack is 96 bytes (`MSTACK_SIZE`: one frame + 12 cells), under the data
-  stack; `boot` and `reset` empty it (`li t0, MSP_TOP` / `mv sp, t0`: `sp` gets its value
+- The machine stack is 96 bytes (`MSTACK_SIZE`: one frame + 12 cells), under the TIB;
+  `boot` and `reset` empty it (`li t0, MSP_TOP` / `mv sp, t0`: `sp` gets its value
   in one instruction). A primitive must leave `sp` as it found it; a jump to an `err_*`
   label from inside a subroutine is fine, because `reset` empties the stack. Interrupts
   must not nest. PUSH and PUSHRSP move the pointer first, then store, so to push `s0`
@@ -116,15 +116,15 @@ hardware.
   yet, see `etc/answers.md` section 9).
 - RAM 0x20000000: the user dictionary grows up from here (`HERE`). It is **empty after
   boot**: every kernel word lives in flash.
-  `FORTH_SIZE` = 0x19B4 = **6,580 bytes** of dictionary budget, up to `DICT_TOP` (which is
+  `FORTH_SIZE` = 0x1954 = **6,484 bytes** of dictionary budget, up to `DICT_TOP` (which is
   `MRING` now).
-- RAM, top down: `DSP_TOP` 0x20002000 (the data stack, 40 cells), `MSP_TOP` 0x20001F60
-  (the machine stack, 96 bytes), `RSP_TOP` 0x20001F00, `TIB_TOP` 0x20001E00,
-  `TIB_BOTTOM` 0x20001D00 (256 B), `var_STATE` 0x20001CFC, `var_TOIN` 0x20001CF8,
-  `var_HERE` 0x20001CF4, `var_LATEST` 0x20001CF0, then log bookkeeping, `var_BASE`
-  0x20001CD8, `var_HLD`, `var_CONTEXT`, `var_CURRENT`, `var_VOCLINK` 0x20001CC8, `var_MRD`,
-  `var_MTIMEOUT` 0x20001CC0, `var_OUT`, `var_IN` 0x20001CB8 (the I/O vectors), `var_IRQS`
-  0x20001CB4, `PAD` 0x20001BB4, `LOGBUF` 0x20001AB4, `MRING` 0x200019B4 (the modem's
+- RAM, top down: `DSP_TOP` 0x20002000 (the data stack, 64 cells), `RSP_TOP` 0x20001F00,
+  `TIB_TOP` 0x20001E00, `TIB_BOTTOM` 0x20001D00 (256 B) = `MSP_TOP` (the machine stack,
+  96 bytes, down to `MSP_BOTTOM` 0x20001CA0), `var_STATE` 0x20001C9C, `var_TOIN` 0x20001C98,
+  `var_HERE` 0x20001C94, `var_LATEST` 0x20001C90, then log bookkeeping, `var_BASE`
+  0x20001C78, `var_HLD`, `var_CONTEXT`, `var_CURRENT`, `var_VOCLINK` 0x20001C68, `var_MRD`,
+  `var_MTIMEOUT` 0x20001C60, `var_OUT`, `var_IN` 0x20001C58 (the I/O vectors), `var_IRQS`
+  0x20001C54, `PAD` 0x20001B54, `LOGBUF` 0x20001A54, `MRING` 0x20001954 (the modem's
   256-byte receive ring)
   = `DICT_TOP`. RAM-variable cells are named `var_X` as in jonesforth, so the bare names
   stay free for word labels; `TIB_BOTTOM` is the start of the input buffer.

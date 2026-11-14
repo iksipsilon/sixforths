@@ -19,7 +19,7 @@ sys.path.insert(0, HERE_DIR)
 import harness as h
 FLASH = open(h.BIN, "rb").read()
 B0 = h.boot()
-HEREVAR = h.SYM["var_HERE"] if "var_HERE" in h.SYM else 0x20001CF4
+HEREVAR = h.SYM["var_HERE"]
 def fw(a): return int.from_bytes(FLASH[a:a+4], "little")
 PATH = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE_DIR, "..", "src", "10-forth-words.s")
 L = open(PATH).read().split("\n")

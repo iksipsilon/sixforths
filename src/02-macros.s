@@ -25,7 +25,7 @@
 # negative offset cannot be compressed). So do not PUSH s0 itself: copy it to
 # a register first (see sp@).
 .macro PUSH reg
-    li t0, MSP_TOP+CELL         # lowest DSP that still has room for a cell
+    li t0, RSP_TOP+CELL         # load address of bottom of stack + 1 CELL
     blt s0, t0, err_overflow    # jump to error handler if stack overflow
 
     addi s0, s0, -CELL  # move the DSP down by 1 cell

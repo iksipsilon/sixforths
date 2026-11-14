@@ -41,7 +41,7 @@ def run_idle(e, max_steps=60_000_000):
 def boot(flash=None):
     flash = flash if flash is not None else open(BIN, "rb").read()
     e = Emu(flash, b"")
-    e.mstack = (SYM["RSP_TOP"], SYM["MSP_TOP"])     # interrupts must find sp in here
+    e.mstack = (SYM["MSP_BOTTOM"], SYM["MSP_TOP"])     # interrupts must find sp in here
     run_idle(e)
     return e
 
