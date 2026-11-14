@@ -16,10 +16,19 @@ to_cfa:
     andi a0, a0, -CELL  # round down to the CELL boundary = the code field
     ret
 
-# obtain a word (token) from the terminal input buffer
-# arguments: a0 = buffer start address
-# returns: a0 = token start address, a1 = token size (length in bytes)
+# obtain the next word (token) from the terminal input buffer and move TOIN
+# past it
+# CH32V006 PORT: upstream's `token` took the buffer address, and each of its
+# six callers worked that out from TOIN before the call and moved TOIN after
+# it. Both are done here now.
+# returns: a0 = token start address, a1 = token size (length in bytes; 0 = the
+#          line is used up)
+# clobbers: t0, t1, t2
 token:
+    li t2, TIB_BOTTOM           # load TIB memory address
+    li t1, var_TOIN
+    lw a0, 0(t1)                # load TOIN value
+    add a0, a0, t2              # add TIB to TOIN: where to start looking
     li t1, CHAR_SPACE           # initialize temporary to 'space' character
     mv t2, zero                 # initialize temporary counter to 0
 token_char:
@@ -38,6 +47,11 @@ token_zero:
     addi a0, a0, -1             # move buffer pointer down to ignore the 0
 token_done:
     mv a1, t2                   # store the size in X
+    add t0, a0, a1              # the address just after the token...
+    li t2, TIB_BOTTOM
+    sub t0, t0, t2              # ...as an offset in the TIB
+    li t1, var_TOIN
+    sw t0, 0(t1)                # move TOIN to process the next word in the TIB
     ret
 
 # convert a string token to a 32-bit integer
@@ -196,7 +210,7 @@ lookup:
 # arguments: a0 = name address, a1 = name length (1..31), a2 = code field
 #            value, a3 = initial flags (0, or F_HIDDEN)
 # leaves HERE just after the code field and LATEST pointing at the new word.
-# Same layout and bounds check as ':' in 08-primitives.s.
+# Used by `:` and `create`.
 # HERE is rounded up to a CELL boundary first, so a header can follow `c,`.
 # clobbers: t0, t1, t2, a0, a4, a5, gp
 make_header:

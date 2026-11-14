@@ -109,17 +109,7 @@ replace_newline:
 
 process_token:
     # process the token
-    li t2, TIB_BOTTOM       # load TIB memory address
-    li a4, var_TOIN         # load TOIN variable into unused temporary register
-    lw a0, 0(a4)            # load TOIN address value into temporary
-    add a0, a0, t2          # add TIB to TOIN to get the start address of TOIN
-    call token              # read the token
-
-    # move TOIN
-    li t2, TIB_BOTTOM       # load TIB memory address
-    add t0, a0, a1          # add the size of the token to TOIN
-    sub t0, t0, t2          # subtract the address of TOIN from TIB to get the new size of TOIN
-    sw t0, 0(a4)            # move TOIN to process the next word in the TIB
+    call token              # read the token and move TOIN past it
 
     # bounds checks on token size
     beqz a1, err_ok         # ok if token size is 0
