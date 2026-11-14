@@ -125,6 +125,92 @@ defcode "line",4,,LINE
     sw a0, 0(s0)
     NEXT
 
+# p ( n -- )           Put the rest of the input line into line n, in flash
+# at once: `20 p : sq dup * ;`. The text may be 63 characters long; no text
+# makes an empty line. The page that holds the line (4 lines) is copied to
+# PAGEBUF, the slot is rebuilt there (text, newline, 0xFF), and the page is
+# erased, programmed and read back. Errors with ? and writes nothing if n is
+# not 0 ... 159 or the text is too long; `? flash` if the read-back differs.
+defcode "p",1,,PUT
+    checkunderflow 0
+    POP a0
+    call line_addr              # a0 = the slot (clobbers t0)
+    # the text: from >in to the end of the line, as `parse` does it
+    li t2, TIB_BOTTOM
+    li a4, var_TOIN
+    lw a1, 0(a4)
+    add a1, a1, t2
+    lbu t0, 0(a1)
+    li t1, CHAR_SPACE
+    bne t0, t1, put_start
+    addi a1, a1, 1              # skip the one space after `p`
+put_start:
+    mv a2, a1                   # a1 = start of the text
+    li a5, TIB_TOP
+put_scan:
+    bgeu a2, a5, put_eol        # never scan past the TIB
+    lbu t0, 0(a2)
+    beqz t0, put_eol            # the TIB is zero-filled beyond the line
+    addi a2, a2, 1
+    j put_scan
+put_eol:
+    sub t0, a2, t2
+    sw t0, 0(a4)                # >in = end of the line: the text is not interpreted
+    sub a2, a2, a1              # a2 = length...
+    beqz a2, put_len
+    addi a2, a2, -1             # ...without the space the newline became
+put_len:
+    li t0, LINE_SIZE-1
+    bgtu a2, t0, err_error      # room for 63 characters and the newline
+    # copy the page of the slot to PAGEBUF
+    andi a3, a0, -FLASH_PAGE    # a3 = page address
+    mv t2, a3
+    li a4, PAGEBUF
+    addi t1, a3, FLASH_PAGE     # t1 = end of the page
+put_stage:
+    lw t0, 0(t2)
+    sw t0, 0(a4)
+    addi t2, t2, CELL
+    addi a4, a4, CELL
+    bne t2, t1, put_stage
+    # the slot in the copy: all 0xFF, then the text and a newline
+    sub a4, a0, a3
+    li t0, PAGEBUF
+    add a4, a4, t0              # a4 = the slot in PAGEBUF
+    mv t2, a4
+    addi t1, a4, LINE_SIZE
+    li t0, -1
+put_blank:
+    sw t0, 0(t2)
+    addi t2, t2, CELL
+    bne t2, t1, put_blank
+put_text:
+    beqz a2, put_newline
+    lbu t0, 0(a1)
+    sb t0, 0(a4)
+    addi a1, a1, 1
+    addi a4, a4, 1
+    addi a2, a2, -1
+    j put_text
+put_newline:
+    li t0, CHAR_NEWLINE
+    sb t0, 0(a4)
+    # erase, program, read back
+    mv a0, a3
+    call fpage_erase            # a0 = page (clobbers t0, t1)
+    li a2, PAGEBUF
+    call fpage_prog             # a0 = page, a2 = source (clobbers t0-t2, a2-a4)
+    li a4, PAGEBUF
+    addi a3, a0, FLASH_PAGE     # a3 = end of the page
+put_verify:
+    lw t1, 0(a0)
+    lw t2, 0(a4)
+    bne t1, t2, err_flash       # the flash did not take it
+    addi a0, a0, CELL
+    addi a4, a4, CELL
+    bne a0, a3, put_verify
+    NEXT
+
 # load ( a b -- )       Interpret lines a to b as if they were typed. They are
 # read when the current input line is finished, so anything after `load` on
 # its line runs first: put it last. A `load` in a loaded line replaces the

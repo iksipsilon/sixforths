@@ -247,5 +247,23 @@ defword "dump",4,,DUMP
 2:  .int DUP, IDX, ADD, CFETCH, BDOT, XLOOP, 1b
 3:  .int DROP, EXIT
 
+##
+# Source lines (12-flash.s)
+##
+
+# : list 1+ swap begin 2dup u> while dup . dup line dup 64 10 scan nip dup
+#     if 64 swap - type else 2drop then cr 1+ repeat 2drop ;
+# ( a b -- )  print lines a to b, each with its number. The text of a line
+# ends at its newline (10); a slot without one was never written and prints
+# as an empty line.
+defword "list",4,,LIST
+    .int ONEPLUS, SWAP
+1:  .int TWODUP, UGREATER, ZBRANCH, 4f
+    .int DUP, DOT, DUP, LINE, DUP, LIT, 64, LIT, 10, SCAN, NIP, DUP, ZBRANCH, 2f
+    .int LIT, 64, SWAP, SUB, TYPE, BRANCH, 3f
+2:  .int TWODROP
+3:  .int CR, ONEPLUS, BRANCH, 1b
+4:  .int TWODROP, EXIT
+
 # back to code: the files included after this one start with machine code
 .text

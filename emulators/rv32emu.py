@@ -10,8 +10,8 @@ def sx(v, bits):
 
 class Emu:
     def __init__(self, flash, uart_in):
-        # pad with 0xFF: that is what erased flash reads, and the source-replay
-        # log uses the first 0xFF byte as its end-of-log marker
+        # pad with 0xFF: that is what erased flash reads (the source lines
+        # count on it: a 0xFF byte is skipped when lines are loaded)
         self.f = bytearray(flash) + bytearray([0xFF] * (0x10000 - len(flash)))
         self.ram = bytearray(8*1024)
         self.x = [0]*16
@@ -36,7 +36,10 @@ class Emu:
                      'loaded': set(),   # word offsets loaded since BUFRST
                      'bufpage': None,   # page the loaded words belong to
                      'latch': None}     # (page offset, word) awaiting BUFLOAD
-        self.gpiod_in = 0        # GPIOD input pins (bit 4 = replay-skip button)
+        # a worn-out flash byte for the tests: {flash offset: the value it
+        # reads after its page was programmed}
+        self.flash_stuck = {}
+        self.gpiod_in = 0        # GPIOD input pins (bit 4 = skip button: line 0 is not loaded)
         self.gpiod_cfglr = 0x44444444   # GPIOD_CFGLR reset value: all floating inputs
         self.gpiod_out = 0              # GPIOD output latch (OUTDR)
         # WeAct board with solder bridges SB3/SB4 closed: PD4 is joined to PD5.
@@ -335,6 +338,8 @@ class Emu:
                         self.fault = ("flash-ftpg-not-erased", self.pc, pa); raise RuntimeError()
                     self.f[pa:pa+256] = fp['buf']
                     fp['buf'] = None
+                    for o, b in self.flash_stuck.items():
+                        if pa <= o < pa + 256: self.f[o] = b
                 else:
                     self.fault = ("flash-strt-mode", self.pc, v); raise RuntimeError()
             return

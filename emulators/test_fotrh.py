@@ -35,7 +35,7 @@ print("boot banner ok:", "sixforths v0.0" in bytes(B0.uart_out).decode("latin1")
 S = h.SYM
 a, gaps = S["DICT_TOP"], []
 for name, size in (("FRAME", "FRAME_SIZE"), ("MLINE", "MLINE_SIZE"), ("MRING", "MRING_SIZE"),
-                   ("LOGBUF", "LOGBUF_SIZE"), ("PAD", "PAD_SIZE"), ("MSP_BOTTOM", "MSTACK_SIZE")):
+                   ("PAGEBUF", "PAGEBUF_SIZE"), ("PAD", "PAD_SIZE"), ("MSP_BOTTOM", "MSTACK_SIZE")):
     if S[name] != a or a % 4:
         gaps.append(name)
     a += S[size]
@@ -351,6 +351,56 @@ e = copy.deepcopy(t0e)
 e.f[LINES0 + 5 * 256:LINES0 + 6 * 256] = b"\xff" * 256      # a power cut left the page of lines 20-23 erased
 out, _ = h.feed(e, "20 31 load\n")
 check("lines: an erased page is skipped", e, out, ["65 emit\nA"])
+# p: a line into flash at once
+slot = lambda e, n: bytes(e.f[LINES0 + 64 * n:LINES0 + 64 * n + 64])
+full = lambda text: text.encode() + b"\n" + b"\xff" * (63 - len(text))
+e = copy.deepcopy(B0)
+out, _ = h.feed(e, "21 p : cube dup sq * ;\n20 p : sq dup * ;\n23 p 65 emit\n22 p\n")
+check("p: the slot holds the text, a newline, then 0xFF; the text is not interpreted", e,
+      out + f" {slot(e, 20) == full(': sq dup * ;')} {slot(e, 21) == full(': cube dup sq * ;')} "
+      f"{slot(e, 22) == full('')} {slot(e, 23) == full('65 emit')} {slot(e, 24) == bytes([255]) * 64}",
+      ["True True True True True"], absent=("A", "?"))
+out, _ = h.feed(e, "21 p : cube 3 ;\n")
+check("p: a shorter text leaves no tail, the other lines of the page stay", e,
+      f"{slot(e, 21) == full(': cube 3 ;')} {slot(e, 20) == full(': sq dup * ;')} {slot(e, 23) == full('65 emit')}",
+      ["True True True"])
+out, _ = h.feed(e, "20 23 load\n4 sq . cube .\n")
+check("p: the lines load", e, out, ["65 emit\nA   ok\n", "16 3 "])
+out, _ = h.feed(e, "0 p 20 21 load\n")
+r = h.boot(flash=bytes(e.f))
+out, _ = h.feed(r, "5 sq .\n")
+check("p: line 0 brings them back after a reset", r, out, ["25 "])
+out, _ = h.feed(e, "19 24 list\n")
+check("list: numbers and text, an empty and an erased line", e, out,
+      ["list\n19 \r\n20 : sq dup * ;\r\n21 : cube 3 ;\r\n22 \r\n23 65 emit\r\n24 \r\n   ok"])
+out, _ = h.feed(e, "0 0 list\n159 159 list\n")
+check("list: line 0 and the last line", e, out, ["0 20 21 load\r\n   ok", "159 \r\n   ok"])
+out, _ = h.feed(e, "23 20 list 66 emit\n")
+check("list backwards prints nothing", e, out, ["emit\nB"])
+out, _ = h.feed(e, "158 160 list\n")
+check("list stops with ? after the last line", e, out, ["158 \r\n159 \r\n160   ?"])
+out, _ = h.feed(e, "list\n")
+check("list needs two numbers", e, out, ["underflow"])
+long63, before = "1 drop " * 9, bytes(e.f[LINES0:LINES0 + LINESN])
+out, _ = h.feed(e, "159 p " + long63 + "\n")
+check("p: 63 characters into the last line", e, out + f" {slot(e, 159) == long63.encode() + bytes([10])}", ["True"], absent=("?",))
+before = bytes(e.f[LINES0:LINES0 + LINESN])
+for name, src in (("64 characters", "30 p " + long63 + "1"), ("line 160", "160 p hello"), ("line -1", "-1 p hello")):
+    out, _ = h.feed(e, src + "\n66 emit\n")
+    check(f"p: {name} is refused, nothing is written", e,
+          out + f" {bytes(e.f[LINES0:LINES0 + LINESN]) == before}", ["  ?\n", "True", "emit\nB"])
+out, _ = h.feed(e, "p hello\n")
+check("p needs a number", e, out, ["underflow"])
+out, _ = h.feed(e, "30 p   two spaces kept\n30 30 list\n")
+check("p: only one space after p is skipped", e, out, ["30   two spaces kept\r\n"])
+out, _ = h.feed(e, ": w1 31 p ; w1 77 emit\n31 31 load\n")
+check("p inside a word takes the rest of the line it runs on", e, out, ["77 emit\nM"])
+out, _ = h.feed(e, "32 p 33 p 68 emit\n32 32 load\n33 33 load\n")
+check("p: a loaded line may put a line", e, out, ["68 emit\nD"])
+x = copy.deepcopy(e)
+x.flash_stuck = {LINES0 + 20 * 64 + 2: 0x00}      # a byte of line 20 that does not take
+out, _ = h.feed(x, "20 p : sq dup * ;\n65 emit\n")
+check("p: a read-back that differs prints ? flash", x, out, ["  ? flash\n", "emit\nA"])
 src = {0: "1 159 load"}
 src.update({k: f": w{k} {k} ;" for k in range(1, 160)})
 e, boot = booted(src)
@@ -533,7 +583,7 @@ e, out, _ = h.session(P, "words\n")
 names = out.split("\n")[1].split()                # line 0 is the echoed input
 print("word count:", len(names))
 check("words lists new primitives", e, out, ["um/mod", "xdoes", "find-name", "parse", "um*", "quit"])
-check("words lists the modem words, then ms and ticks", e, out, ["\n <modem >modem mtimeout memit mkey mkey? ms ticks irqs fpage-prog fpage-erase wipe load line "])
+check("words lists the modem words, then ms and ticks", e, out, ["\n <modem >modem mtimeout memit mkey mkey? ms ticks irqs fpage-prog fpage-erase wipe load p line "])
 
 print("\nALL PASS" if failures == 0 else f"\n{failures} FAILURES")
 sys.exit(1 if failures else 0)

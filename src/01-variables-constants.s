@@ -70,18 +70,16 @@
 # page long, and the SMS being written is meant to live here.
 .equ PAD_SIZE, 256
 .equ PAD, MSP_BOTTOM - PAD_SIZE
-# CH32V006 PORT: pending batch buffer for the log. Lines of a multi-line
-# definition are held here and committed to flash only when a line ends with
-# STATE = 0, so a definition reaches the log whole or not at all. It is in
-# use only between the lines of a definition typed with +log on, so a running
-# word may stage a user flash page in it (planned for the call log).
-.equ LOGBUF_SIZE, 256
-.equ LOGBUF, PAD - LOGBUF_SIZE
+# CH32V006 PORT: one flash page of RAM. `p` builds the page of the line it
+# changes here and is done with it when it returns, so a running word may
+# stage a user flash page in it (planned for the call log).
+.equ PAGEBUF_SIZE, 256
+.equ PAGEBUF, PAD - PAGEBUF_SIZE
 # CH32V006 PORT: modem receive ring. DMA1 channel 7 writes every byte USART2
 # receives into it, round and round (14-modem.s). A power of two, so an
 # offset wraps with one AND.
 .equ MRING_SIZE, 256
-.equ MRING, LOGBUF - MRING_SIZE
+.equ MRING, PAGEBUF - MRING_SIZE
 # CH32V006 PORT: reserved for drivers that are not written yet; nothing uses
 # these two. MLINE: one line of the modem's answer, copied out of the ring so
 # that s= scan /string see it in one piece (a text-mode SMS is 160 characters
