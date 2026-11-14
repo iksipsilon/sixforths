@@ -174,9 +174,10 @@ search_done:
 # header of its newest word; FORTH's head cell is var_LATEST.
 # arguments: a0 = name address, a1 = name length
 # returns: a2 = address of the word header, or 0 (a0 and a1 are preserved)
-# clobbers: t0, t1, t2, a3, a4, a5, gp
+# clobbers: t0, t1, a3, a4, a5, gp
 search_order:
-    mv t2, ra                   # search_chain is called below
+    addi sp, sp, -CELL          # search_chain is called below: ra goes on
+    sw ra, 0(sp)                # the machine stack
     li a3, var_CONTEXT
     lw a3, 0(a3)                # a3 = head cell of the context vocabulary
     lw a2, 0(a3)
@@ -187,14 +188,16 @@ search_order:
     lw a2, 0(t0)
     call search_chain
 search_order_done:
-    jr t2
+    lw ra, 0(sp)
+    addi sp, sp, CELL
+    ret
 
 # find a word for the interpreter, or fail
 # arguments: a0 = token buffer address, a1 = token length
 # returns: a1 = address of the word header (a0 is preserved). A word that is
 # not found ends in the error handler, which also drops a half-built
 # definition (abandon_def).
-# clobbers: t0, t1, t2, a2, a3, a4, a5, gp
+# clobbers: t0, t1, a2, a3, a4, a5, gp
 lookup:
     addi sp, sp, -CELL          # search_order is called below: ra goes on
     sw ra, 0(sp)                # the machine stack

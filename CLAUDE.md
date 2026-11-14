@@ -278,6 +278,8 @@ Still open from before:
 
 **Where we stopped (2026-11-12): waiting for the display and key hardware**, which may
 take more than a month.
+- Not flashed yet: `search_order` keeps `ra` on the machine stack (the commit after
+  `56f7fc4`; same size, emulator only).
 - The board runs commit `40d7cf6` (13,728 bytes; flashed 2026-11-14: the machine stack on
   `sp`, `s0` = DSP, `tp` = RSP). Checked there besides the list that follows: `/mod` `/`
   `mod`, 64 cells fit and the 65th overflows, `0 rp! nosuchword` prints `?`, a wrong
