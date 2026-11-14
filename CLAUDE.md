@@ -292,11 +292,8 @@ error recovery by the hidden flag, vocabularies. `fpage-erase` ran on the board 
 experiment; `fpage-prog` has not run there yet.
 
 Still open from before:
-- The source lines (`p` `list` `load`, line 0 at boot) are tested in the emulator only:
-  **not flashed yet**. To check on the board: put, list and load two lines; line 0 after
-  `reboot` and after a hardware reset; change one line and see its page neighbours intact;
-  a bad line 0 prints `?` and gives the prompt; PD4 held loads nothing; `irqs` around ten
-  `p`; the time of one `p`; `wipe` and a read-back.
+- The source lines: holding PD4 at reset (line 0 must not load) is not checked on the
+  board yet; it needs a hand on the button.
 - A pyserial backend for `emulators/test_fotrh.py`, so the same tests run against the real
   board (and against the emulator through a fake port).
 - Optional: `?do`.
@@ -311,14 +308,19 @@ take more than a month.
   `sp!` / `rp!` prints `?`, `memit` / `mkey` and `>modem` through the D2-D3 wire, a
   vocabulary, and a `+log` round trip (a one-line and a two-line definition replayed after
   `reboot` and after a hardware reset, then `wipe`; the read-back showed the kernel equal
-  to `sixforths.bin` and the log empty). That kernel still has the source-replay log
-  (`+log` `-log`). Since then the RAM map changed and the log was replaced by the source
-  lines (13,580 bytes); that kernel is tested in the emulator only and is **not flashed yet**.
+  to `sixforths.bin` and the log empty). **Since 2026-11-14 the board runs `9f1401a`**
+  (13,580 bytes: the source lines instead of the log). Checked there: `p` `list` `load`
+  with two lines, ten `p` in a row (5 of 398 ticks lost in 796 ms), one line changed with
+  its page neighbours intact, `160 p` prints `?`, line 0 after `reboot` and after a
+  hardware reset, a bad line 0 (`?`, then the prompt), one `p` takes about 5 ms from the
+  echo to `ok`, `wipe`. The read-back showed the kernel equal to `sixforths.bin`, the
+  lines and the user flash empty, and the old kernel's last 148 bytes still after the
+  new one (0x350C-0x359F), as expected.
   Checked: boot, an error with 3 cells on the stack and one inside
   a definition (both leave `depth` 0), 40 cells through 1000 ms of ticks (500 ticks, the
   sum intact), `reboot`. Flashing printed one stray byte before the banner; a plain
-  `minichlink -b` reset did not. Its log region is empty (so line 0
-  of the new kernel will be empty too), and the user flash is empty. A wire joins D2 and D3 (the USART2
+  `minichlink -b` reset did not. Its source lines are empty
+  and the user flash is empty. A wire joins D2 and D3 (the USART2
   loopback; D2 is driven as an output at every boot) and the board's USB-C socket is
   unplugged. Nothing else is connected.
 - Next: 5b (the LED rows in the tick) once the matrix is wired, then 5c (the keys). Ask
