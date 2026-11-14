@@ -41,7 +41,7 @@ for name, size in (("FRAME", "FRAME_SIZE"), ("MLINE", "MLINE_SIZE"), ("MRING", "
     a += S[size]
 # the variables: every cell from the top of the machine stack up to the TIB, each used once.
 # A variable added without moving MSP_TOP would lie inside the machine stack and fail here.
-cells = sorted(v for k, v in S.items() if k.startswith("var_") or k in ("LOGEN", "LOGPND", "LOGSRC", "LOGEND"))
+cells = sorted(v for k, v in S.items() if k.startswith("var_") or k == "LOGSRC")
 check("RAM map: dictionary, buffers, machine stack, variables, TIB and stacks fill the RAM exactly", B0,
       f"gaps={gaps} stack_top={a == S['MSP_TOP']} cells={cells == list(range(S['MSP_TOP'], S['TIB_BOTTOM'], 4))} "
       f"dict={S['FORTH_SIZE'] == S['DICT_TOP'] - S['RAM_BASE']} "
@@ -232,10 +232,9 @@ t("... its name is gone", FV + "v2", "  ?", absent=())
 t("forget keeps older vocabularies", "vocabulary v1 v1 definitions : p1 11 ; forth definitions vocabulary v2\nforget v2\nv1 p1 . forth voc-link @ ' v1 >body 4 + = .", "11 -1 ")
 t("... but not what was added to them later", "vocabulary v1 vocabulary v2 v1 definitions : p1 11 ; forth definitions\nforget v2\nv1 p1", "  ?", absent=())
 t("forget refuses a word of an unselected vocabulary", VOC + "vocabulary e3 e3 definitions : only 1 ; forth definitions\nforget only", "  ?", absent=())
-# vocabularies survive the source log
-e = copy.deepcopy(B0)
-h.feed(e, "+log\n" + VOC)
-r = h.boot(flash=bytes(e.f))
+# vocabularies come back from the source region
+FLASH = open(h.BIN, "rb").read()
+r = h.boot(flash=bytes(FLASH) + bytes([0xFF] * (0x4000 - len(FLASH))) + VOC.encode())
 out, _ = h.feed(r, "k3 edit k3 forth k3\n")
 check("vocabularies come back with the log", r, out, ["forth k3\nGFG"])
 
@@ -294,45 +293,17 @@ check("exception via vector 3 prints the beacon", e, out, ["T00000004 00001234 "
 
 # ---- source-replay log: fast 256-byte page programming ----
 LOG0, LOGN = 0x4000, 0x2800                      # log region (flash offsets)
-logbytes = lambda e: bytes(e.f[LOG0:LOG0 + LOGN]).split(b"\xff")[0]
-e = copy.deepcopy(B0)
-h.feed(e, "+log\n: sq dup * ;\n")
-check("log: lines appended (the newline became a space)", e, repr(logbytes(e)),
-      [repr(b"+log \n: sq dup * ; \n")])
-r = h.boot(flash=bytes(e.f))                     # simulated reset
-out, _ = h.feed(r, "3 sq 48 + emit\n")
-check("log: replay after reset brings the word back", r, out, ["emit\n9"])
-e = copy.deepcopy(B0)
-h.feed(e, "+log\n: tw\n2 *\n;\n: bad\nnosuchword\n")
-check("log: a definition is logged whole, a failed one not at all", e, repr(logbytes(e)),
-      [repr(b"+log \n: tw \n2 * \n; \n")], absent=("bad",))
-# a log of many pages (this used to be the prelude, which now lives in flash)
-e = copy.deepcopy(B0)
-h.feed(e, "+log\n")
-errs = 0
-for k in range(180):
-    out, _ = h.feed(e, f": w{k} {k} ;\n")
-    errs += "  ?" in out
-n = len(logbytes(e))
-r = h.boot(flash=bytes(e.f))
+img = bytearray(FLASH) + bytearray([0xFF] * (LOG0 - len(FLASH)))
+src = b"".join(b": w%d %d ; \n" % (k, k) for k in range(180))
+r = h.boot(flash=bytes(img + src))
 out, _ = h.feed(r, "w0 w179 + .\n")
-check(f"log: 180 definitions logged ({n} bytes) and replayed", r,
-      out + f" errs={errs}" + (" [many pages]" if n > 8 * 256 else ""), ["179 ", "errs=0", "[many pages]"])
-h.feed(e, "wipe\n")
-erased = bytes(e.f[LOG0:LOG0 + LOGN]) == b"\xff" * LOGN
-check("log: wipe erases the region", e, "[erased]" if erased else "[NOT erased]", ["[erased]"])
-r = h.boot(flash=bytes(e.f))
+check(f"log: 180 definitions ({len(src)} bytes, many pages) replayed", r, out, ["179 "])
+h.feed(r, "wipe\n")
+erased = bytes(r.f[LOG0:LOG0 + LOGN]) == b"\xff" * LOGN
+check("log: wipe erases the region", r, "[erased]" if erased else "[NOT erased]", ["[erased]"])
+r = h.boot(flash=bytes(r.f))
 out, _ = h.feed(r, "w0 .\n")
 check("log: nothing is replayed after wipe", r, out, ["  ?"])
-img = bytearray(FLASH) + bytearray([0xFF] * (LOG0 - len(FLASH)))
-img += b"0 drop \n" * ((LOGN - 8) // 8)          # an almost full log: 8 bytes free
-e = h.Emu(bytes(img), b"")
-e.gpiod_in = 0x10                                # PD4 held: skip the replay
-h.run_idle(e, 100_000)
-out, _ = h.feed(e, "+log\n: sq dup * ;\n1 drop\n")
-tail = bytes(e.f[LOG0 + LOGN - 8:LOG0 + LOGN])
-check("log: a full log turns logging off", e, out + f" tail={tail!r}",
-      ["? log off", repr(b"+log \n\xff\xff")])
 # the end of the replay: no extra empty line and "ok" after a whole last line,
 # none for an empty log, but a partial last line (power cut) is still closed
 img = bytearray(FLASH) + bytearray([0xFF] * (LOG0 - len(FLASH)))

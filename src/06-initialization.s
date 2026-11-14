@@ -58,13 +58,8 @@ boot_arm:
     li t1, var_BASE
     sw t0, 0(t1)
 
-    # CH32V006 PORT: source-replay log initialization
-    call flash_unlock   # unlock the FPEC: program/erase enabled from here on
-    call log_scan       # find the append frontier (first erased halfword)
-    li t0, LOGEN
-    sw zero, 0(t0)      # logging starts disabled (+log enables it)
-    li t0, LOGPND
-    sw zero, 0(t0)      # no pending batch
+    # CH32V006 PORT: unlock the FPEC: program/erase enabled from here on
+    call flash_unlock
 
     # display boot message
     print_message boot
@@ -76,8 +71,7 @@ reset:
     # pass through reset starts the replay from LOG_BASE. Every later pass
     # through reset is an error path: abandon the replay (a bad log line can
     # never wedge the boot; the rest of the log is skipped and input falls
-    # back to the UART) and drop the pending log batch (the failed line's
-    # definition must not be logged).
+    # back to the UART).
     li t0, LOGSRC
     lw t1, 0(t0)
     li t2, -1
@@ -88,8 +82,6 @@ reset:
 reset_noreplay:
     sw zero, 0(t0)      # error or normal operation: input from the UART
 reset_replay_done:
-    li t0, LOGPND
-    sw zero, 0(t0)      # drop any pending (uncommitted) log batch
 
     # initialize stack pointers
     # CH32V006 PORT: the machine stack is emptied too: an error may have left

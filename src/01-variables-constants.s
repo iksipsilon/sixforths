@@ -24,14 +24,11 @@
 .equ var_TOIN, var_STATE - CELL         # 1 CELL for TOIN variable (looks into TIB)
 .equ var_HERE, var_TOIN - CELL          # 1 CELL for HERE variable
 .equ var_LATEST, var_HERE - CELL        # 1 CELL for LATEST variable
-# CH32V006 PORT: source-replay log variables (see 12-flash.s)
-.equ LOGEN, var_LATEST - CELL           # 1 CELL: logging enabled flag (0 = off)
-.equ LOGPND, LOGEN - CELL               # 1 CELL: pending byte count in LOGBUF
-.equ LOGSRC, LOGPND - CELL              # 1 CELL: replay pointer (0 = UART, -1 = armed)
-.equ LOGEND, LOGSRC - CELL              # 1 CELL: append frontier in the flash log
+# CH32V006 PORT: the input source (see uart_get in 04-io-helpers.s)
+.equ LOGSRC, var_LATEST - CELL          # 1 CELL: replay pointer (0 = UART, -1 = armed)
 # CH32V006 PORT: variables of the number output words. They are RAM cells here
 # because the words that use them (10-forth-words.s) live in flash.
-.equ var_BASE, LOGEND - CELL            # 1 CELL: number base for . u. # (see base)
+.equ var_BASE, LOGSRC - CELL            # 1 CELL: number base for . u. # (see base)
 .equ var_HLD, var_BASE - CELL           # 1 CELL: <# ... #> build pointer (see hld)
 # CH32V006 PORT: vocabularies. A vocabulary is known by the address of its head
 # cell, the cell that holds the header of its newest word. FORTH's head cell is
