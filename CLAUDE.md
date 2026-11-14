@@ -278,14 +278,13 @@ Still open from before:
 
 **Where we stopped (2026-11-12): waiting for the display and key hardware**, which may
 take more than a month.
-- Not flashed yet: `search_order` keeps `ra` on the machine stack (the commit after
-  `56f7fc4`; same size, emulator only).
-- The board runs commit `40d7cf6` (13,728 bytes; flashed 2026-11-14: the machine stack on
+- The board runs commit `2970f96` (13,728 bytes; flashed 2026-11-14: the machine stack on
   `sp`, `s0` = DSP, `tp` = RSP). Checked there besides the list that follows: `/mod` `/`
   `mod`, 64 cells fit and the 65th overflows, `0 rp! nosuchword` prints `?`, a wrong
   `sp!` / `rp!` prints `?`, `memit` / `mkey` and `>modem` through the D2-D3 wire, a
-  vocabulary. Not run there: a log write (`+log`) with this kernel, whose `log_commit`
-  now keeps its frontier on the machine stack (emulator only so far).
+  vocabulary, and a `+log` round trip (a one-line and a two-line definition replayed after
+  `reboot` and after a hardware reset, then `wipe`; the read-back showed the kernel equal
+  to `sixforths.bin` and the log empty).
   Checked: boot, an error with 3 cells on the stack and one inside
   a definition (both leave `depth` 0), 40 cells through 1000 ms of ticks (500 ticks, the
   sum intact), `reboot`. Flashing printed one stray byte before the banner; a plain
