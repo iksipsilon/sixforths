@@ -179,7 +179,9 @@ has a 64-byte slot: the text (up to 63 characters), a newline, then unused bytes
 - `n line` gives the slot's address. `wipe` erases all 160 lines.
 - **Line 0 is interpreted at boot** unless PD4 is held. It usually holds a `load`.
 - Comments never reach a line (the REPL swallows them first). The master copy of the
-  source is a file on the PC; `awk '{ print NR+3, "p", $0 }' file.f` numbers it from line 4.
+  source is a file on the PC; `grep -v -e '^\\' -e '^ *$' file.f | awk '{ print NR+3, "p", $0 }'`
+  numbers it from line 4. The `grep` matters: `7 p \ comment` would swallow the newline and
+  put the next line of the file, number and `p` included, into line 7.
 - Inside: `uart_get` (`04-io-helpers.s`) takes its bytes from `var_SRC` up to `var_SRCEND`
   while `var_SRC` is not 0, skipping 0xFF; `reset` clears it. `fpage-erase` / `fpage-prog`
   still refuse the lines, and `p` refuses everything else.
@@ -247,6 +249,8 @@ Layout:
   is empty now: its 57 words moved into flash. A word tried out there (or kept in
   the flash lines with `p`) is moved into `08-primitives.s` or `10-forth-words.s` once it is stable.
 - `etc/board.py` talks to the board over the UART for hardware tests (see Phase 2).
+- `etc/source-lines.md` explains the source lines in full: use, what happens in flash and
+  RAM, the reasons for the structure, the comparison with classical blocks and with the log.
 - `etc/answers.md` holds the design decisions behind the kernel layout and the plan for the
   phone (registers, flash, call log format, vocabularies, key input). Read it before
   starting on a driver.
