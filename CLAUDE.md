@@ -77,6 +77,10 @@ hardware.
   code to `.text`; after a `defword` thread, write `.text` before any plain code. The flag
   is `F_IMMEDIATE` (jonesforth: `F_IMMED`). A wrong `namelen` stops the build with
   "namelen of X does not match its name" (the line number points into the macro).
+- Console messages: `message name, "text"` defines one (`msg_name` ... `end_name`),
+  `print_message name` prints it, `print_error name, jump` makes the handler `err_name`.
+  No lengths are counted by hand. `token` (05) returns the next word of the TIB and moves
+  `>in` past it; `:` and `create` both build their header with `make_header`.
 - Words chain automatically in assembly (include) order through `link`. `last_word`,
   set after the last include in `sixforths.s`, is where LATEST starts at boot, so there is
   no chain tail to update by hand.
@@ -105,7 +109,7 @@ hardware.
 
 - Flash 0x00000000: kernel + `.rodata`, **must stay under 16 KiB** (`FLASH` `LENGTH` in
   `linker.ld` at the repo root; confirm it says 16k).
-  Currently 13,956 bytes (182 words). Report the size after every change.
+  Currently 13,728 bytes (182 words). Report the size after every change.
 - Flash 0x08004000-0x08006800: source-replay log (10 KiB).
 - Flash 0x08006800-0x0800F800 (`USER_FLASH`..`FLASH_TOP`, 36 KiB): the application's own
   data, written a 256-byte page at a time with `fpage-erase ( page -- )` and
@@ -275,7 +279,7 @@ Still open from before:
 **Where we stopped (2026-11-12): waiting for the display and key hardware**, which may
 take more than a month.
 - **Not flashed yet (2026-11-14):** the kernel with the machine stack on `sp` (`s0` = DSP,
-  `tp` = RSP; 13,956 bytes) passes in the emulator only. On the board, repeat the checks
+  `tp` = RSP; 13,728 bytes) passes in the emulator only. On the board, repeat the checks
   listed below, plus `0 rp! nosuchword` (must print `?`, not a `T...` line).
 - The board runs commit `3b085aa` (13,592 bytes; flashed 2026-11-14: `sp` was still the
   data stack there). Checked there: boot, an error with 3 cells on the stack and one inside

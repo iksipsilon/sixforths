@@ -111,13 +111,28 @@ code_\label :                   # machine code follows, ending with NEXT
     beq a0, t0, \dest   # jump to the destination if the char matches
 .endm
 
-# print a message
-.macro print_error name, size, jump
+# a message for the console: msg_X is its start, end_X its end
+# CH32V006 PORT: the lengths were counted by hand at each use; now a label
+# marks the end. (A length computed as end - start does not always assemble:
+# the RISC-V assembler leaves some label differences to the linker.)
+.macro message name, text
+  msg_\name : .ascii "\text"
+  end_\name :
+.endm
+
+# print a message on the console
+# clobbers: a0, a1, a2, t0, t1, ra
+.macro print_message name
+    la a1, msg_\name            # load string message
+    la a2, end_\name            # its end
+    call uart_print             # call uart print function
+.endm
+
+# an error handler: print a message, then jump
+.macro print_error name, jump
     .balign CELL
   err_\name :
-    la a1, msg_\name    # load string message
-    addi a2, a1, \size  # load string length
-    call uart_print     # call uart print function
+    print_message \name
     j \jump             # jump when print returns
 .endm
 

@@ -144,6 +144,8 @@ log_scan_done:
     sw t0, 0(t1)
     ret
 
+message logoff, "  ? log off\n"
+
 .balign CELL
 # commit hook, called from err_ok with the completed line still in the TIB.
 # Appends the line to the pending batch; flushes the batch to flash when the
@@ -288,9 +290,7 @@ log_commit_off:
     # and say so - the line was NOT saved
     li t0, LOGEN
     sw zero, 0(t0)
-    la a1, msg_logoff
-    addi a2, a1, 12
-    call uart_print
+    print_message logoff
 log_commit_drop:
     li t0, LOGPND
     sw zero, 0(t0)
@@ -299,7 +299,6 @@ log_commit_exit:
     addi sp, sp, 2*CELL
     ret
 
-msg_logoff: .ascii "  ? log off\n"
 
 ##
 # Log words

@@ -2,6 +2,9 @@
 # Initialization
 ##
 
+message boot, "sixforths v0.0\n\n"
+
+.balign CELL
 # board boot initializations
 boot:
     # CH32V006 PORT: the machine stack first, for interrupt frames (HPE) and
@@ -64,9 +67,7 @@ boot_arm:
     sw zero, 0(t0)      # no pending batch
 
     # display boot message
-    la a1, msg_boot     # load string message
-    addi a2, a1, 16     # load string length
-    call uart_print     # call uart print function
+    print_message boot
     j reset
 
 # reset the Forth stack pointers, registers, variables, and state
@@ -177,4 +178,3 @@ tib_zerofill:
 tib_done:
     j interpreter_start # jump to the main interpreter REPL
 
-msg_boot: .ascii "sixforths v0.0\n\n"
