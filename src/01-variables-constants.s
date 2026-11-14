@@ -24,7 +24,7 @@
 .equ var_TOIN, var_STATE - CELL         # 1 CELL for TOIN variable (looks into TIB)
 .equ var_HERE, var_TOIN - CELL          # 1 CELL for HERE variable
 .equ var_LATEST, var_HERE - CELL        # 1 CELL for LATEST variable
-# CH32V006 PORT: source-replay log variables (see 12-flash-log.s)
+# CH32V006 PORT: source-replay log variables (see 12-flash.s)
 .equ LOGEN, var_LATEST - CELL           # 1 CELL: logging enabled flag (0 = off)
 .equ LOGPND, LOGEN - CELL               # 1 CELL: pending byte count in LOGBUF
 .equ LOGSRC, LOGPND - CELL              # 1 CELL: replay pointer (0 = UART, -1 = armed)

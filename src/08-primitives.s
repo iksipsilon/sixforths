@@ -7,7 +7,7 @@
 # upstream's 08-forth-primitives.s with the port's eForth-style and ANS-style
 # additions. The dictionary is chained in file order and searched from the
 # end, so a word near the end of this file is found fastest. The log words
-# (+log -log wipe) live with their machinery in 12-flash-log.s.
+# (+log -log wipe) live with their machinery in 12-flash.s.
 #
 # Registers: s0 = DSP (data stack), tp = RSP (return stack), s1 = IP,
 # a0 = W (NEXT hands W to the code-field routine like an argument). sp is the
