@@ -1,0 +1,29 @@
+--- a/06-initialization.s	2026-11-11 09:31:41.922737939 +0000
++++ b/06-initialization.s	2026-11-11 09:31:41.937055574 +0000
+@@ -6,7 +6,7 @@
+     li t0, RAM_BASE
+     li t1, HERE
+     sw t0, 0(t1)
+-    la t0, word_WIPE
++    la t0, word_QUIT
+     li t1, LATEST
+     sw t0, 0(t1)
+     call flash_unlock
+--- a/08-forth-primitives.s	2026-11-11 09:31:41.922756557 +0000
++++ b/08-forth-primitives.s	2026-11-11 09:31:41.937210549 +0000
+@@ -68,8 +68,6 @@
+ 
+ defcode "emit", EMIT, KEY
+     checkunderflow 0
+-    li a0, CHAR_SPACE
+-    call uart_put
+     POP a0
+     call uart_put
+     NEXT
+--- a/fiveforths.s	2026-11-11 09:31:41.922769569 +0000
++++ b/fiveforths.s	2026-11-11 09:31:41.936816223 +0000
+@@ -15,3 +15,4 @@
+ .include "09-interpreter.s"
+ .include "11-eforth-primitives.s"
+ .include "12-flash-log.s"
++.include "13-ans-primitives.s"

@@ -3,4 +3,5 @@
 *.elf
 *.o
 *.dump
-emulators/__pycache__/*.pyc
+__pycache__/
+*.bundle

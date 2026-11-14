@@ -1,0 +1,77 @@
+	REGISTERS
+
+in CLAUDE.md you write:
+
+ - Registers: `sp` = data stack, `s0` = return stack, `s1` = IP, `a0` = W,
+   `a1-a3` = X/Y/Z scratch, `a4`, `a5`, `gp`, `tp` = more scratch.
+   **`t0` is clobbered by PUSH / POP / PUSHRSP / POPRSP / checkunderflow macros.**
+
+You don't mention t1 and t2, but I assume they are scratch as well. Can you make 
+variables for registers so that in the code you don't see s0, a0, t1,... but assign 
+the following names which appear trough the code:
+
+PP (parameter pointer) = sp
+RP (return pointer) = s0
+IP (instruction pointer) = s1
+WP (current word pointer) = a0 (maybe better just W instead of WP?) 
+P0 (clobbered by PUSH / POP / PUSHRSP / POPRSP / checkunderflow macros) = t0 (so it is beter not to use for other purposes?) If so we are left with 9 registers for scratch:
+
+X0-X8 (scratch registers) t1, t2, a1-a5, gp, tp
+
+
+	FLASH MEMORY
+
+in CLAUDE.md you write:
+
+- Flash 0x00000000: kernel + `.rodata`, **must stay under 16 KiB** (`FLASH` `LENGTH` in
+  `src/board/ch32v006f8u6/linker.ld`; confirm it says 16k).
+  Currently 8,828 bytes. Report the size after every change.
+- Flash 0x08004000-0x08006800: source-replay log (10 KiB). Space above that is
+  reserved for the phonebook / SMS storage. Do not touch it casually.
+
+	I can use SIM card storage for the phonebook and SMS (if later I will add a SD card 
+over SPI I can save them there if I will need more storage). However I would like to 
+have SMS organised (with a header?) so that when I open the contact I have all its SMS outgoing and incoming at one place)
+	For now we need to focus on the call logs. I have to access them with filters: 
+1. All logs (no filter)
+2. All logs from a selected contact or called number
+3. All missed calls
+
+We will need place to store the glyph table for 3x5 fonts, and pushbutton input to AT command interpreter.
+
+
+	FREEZE prelude.f
+
+If I got it right you intent to rewrite the colon words to assembly. Why not write them in assembly in first place? I also want to merge the primitives to one 08-primitives.s file and sort them in the file according to their function (as in ~/code/forth/sixforths/docs/forth/Inside83.pdf pg. 54: memory (@, !, HERE, PAD...), logic (AND, OR,...), arithmetic(+, 2*,...), comparison (0<, <>, =...), string, and any other category that is relevant to sixforths.
+
+
+
+	VOCABULARY and CONTEXT
+
+The Claude Sonnet that wrote the original CLAUDE.md for sixforths, insisted to use 
+xt tables for UI modes (menues): idle, dial, call logs, sms, phonebook, settings,...
+I suggested on the other hand to use DOVOC Code Field routine, so in different contexts
+the pushbutton combinations serve different purposes (during the call button 3 is 
+volume down, during writing sms (editor mode) button 3 pressed three times is character 
+f, during contact search it is moving up the contact list, and so on. Although I wanted
+to have the words for vocabulary the Claude Sonnet elimineted them from my word wishlist.Explain pros and cons of each approach xt tables vs vocabulary. 
+cons of this two approaches  
+
+	EDITOR with 5-8 pushbutton input 
+
+	I wanted to implement an input with as few buttons as possible. I opted for 5 buttons
+in the beginning, because I can input the decimal numbers like on the soroban (abacus)
+thumb for 5, index for 1, index and middle for 2, thumb and index for 6, middle finger 
+0,... other key combinations for accessing menue. The character input in editor mode
+would be thumb for letters a, b, c, d, e, ; index for f, g, h, i ,j and so on a key 
+combination for special characters. Once you press a let's say index you are presented
+with 5 characters and if you pres for example pinky (the last button) than j is entered
+some kez combination would be for delete...
+	However now I am more inclined to use 8 pushbuttons in a similar matter, but trough
+a 74HC165 parallel in serial out shift register.
+
+
+	PRIMITIVES
+
+Please make a suggestion for the primitives written in assembly, so I can implement my 
+whole system upon them. or are you happy with the current choice including prelude.f? 
