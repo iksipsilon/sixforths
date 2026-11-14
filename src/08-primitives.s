@@ -317,11 +317,19 @@ defcode "sp@",3,,DSPFETCH
     PUSH t1             # store DSP in the top of the stack
     NEXT
 
-# sp! ( a -- )          Set the data stack pointer
+# sp! ( a -- )          Set the data stack pointer. CH32V006 PORT: a must be
+# CELL-aligned and inside the data stack (r0 ... s0), else it is an error:
+# an unaligned pointer would trap at the next push.
 defcode "sp!",3,,DSPSTORE
     checkunderflow 0    # need 1 item
-    POP t1
-    mv s0, t1
+    POP a1
+    andi t0, a1, CELL-1
+    bnez t0, err_error
+    li t0, RSP_TOP
+    bltu a1, t0, err_error
+    li t0, DSP_TOP
+    bgtu a1, t0, err_error
+    mv s0, a1
     NEXT
 
 # s0 ( -- a )           Address just above the data stack's first cell
@@ -369,11 +377,18 @@ defcode "rp@",3,,RSPFETCH
     PUSH tp             # store RSP in the top of the stack
     NEXT
 
-# rp! ( a -- )          Set the return stack pointer
+# rp! ( a -- )          Set the return stack pointer. CH32V006 PORT: a must be
+# CELL-aligned and inside the return stack (up to r0), else it is an error.
 defcode "rp!",3,,RSPSTORE
     checkunderflow 0    # need 1 item
-    POP t1
-    mv tp, t1
+    POP a1
+    andi t0, a1, CELL-1
+    bnez t0, err_error
+    li t0, TIB_TOP
+    bltu a1, t0, err_error
+    li t0, RSP_TOP
+    bgtu a1, t0, err_error
+    mv tp, a1
     NEXT
 
 # r0 ( -- a )           Address just above the return stack's first cell

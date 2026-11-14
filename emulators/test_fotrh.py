@@ -404,6 +404,13 @@ t("the tick runs after reboot", "reboot\nirqs 20 ms irqs swap - dup 9 < . 11 > .
 t("the tick runs after an error", "nosuchword\nirqs 20 ms irqs swap - dup 9 < . 11 > .", "\n0 0 ", absent=())
 # the data stack pointer is not sp any more: a wild one ends in an error, not in a trap
 t("0 sp! then ticks: an error, no trap", "0 sp! 20 ms 1\n65 emit", "emit\nA", absent=("T0",))
+t("sp! unaligned: an error", "1 2 sp@ 2 + sp!\n65 emit", "sp!\n  ?", "emit\nA", absent=("T0",))
+t("sp! below the data stack: an error", "r0 4 - sp!\n65 emit", "sp!\n  ?", "emit\nA", absent=("T0",))
+t("sp! to both ends of the data stack", "1 2 3 s0 sp! depth . : t r0 sp! 2drop 2drop sp@ >r s0 sp! r> r0 - . ; t", "\n0 16 ")
+t("rp! unaligned: an error", "r0 2 - rp!\n65 emit", "rp!\n  ?", "emit\nA", absent=("T0",))
+t("rp! above the return stack: an error", "r0 4 + rp!\n65 emit", "rp!\n  ?", "emit\nA", absent=("T0",))
+t("rp! below the return stack: an error", "tib rp!\n65 emit", "rp!\n  ?", "emit\nA", absent=("T0",))
+t("r0 rp! at the console changes nothing", "r0 rp! 65 emit", "emit\nA")
 # the error message does not go through the return stack pointer
 t("0 rp! then an error: the message, no trap", "0 rp! nosuchword\n65 emit", "nosuchword\n  ?", "emit\nA", absent=("T0",))
 t("an sp! above the stack: an error, no trap", "-4 sp! 20 ms 1\n65 emit", "emit\nA", absent=("T0",))
