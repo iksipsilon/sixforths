@@ -149,8 +149,8 @@ log_scan_done:
 # Appends the line to the pending batch; flushes the batch to flash when the
 # line ends in interpret state. See the file header for the full policy.
 log_commit:
-    addi s0, s0, -CELL          # spill ra to the return stack (nested calls
-    sw ra, 0(s0)                # below; one unchecked cell, like uart_print)
+    addi sp, sp, -2*CELL        # two cells on the machine stack: ra (nested
+    sw ra, CELL(sp)             # calls below) and, at 0(sp), the append frontier
 
     # never append while replaying: the source already IS the log
     li t0, LOGSRC
@@ -209,8 +209,9 @@ log_commit_copy:
 log_commit_even:
     # room check against the top of the log region
     li t0, LOGEND
-    lw tp, 0(t0)                # tp = append frontier (destination)
-    add a4, tp, t1
+    lw a2, 0(t0)                # a2 = append frontier (destination)
+    sw a2, 0(sp)                # kept at 0(sp) while the pages are written
+    add a4, a2, t1
     li a5, LOG_TOP
     bgtu a4, a5, log_commit_off
     mv gp, t1                   # gp = bytes left to write (even, > 0)
@@ -218,7 +219,8 @@ log_commit_even:
 log_commit_page:
     # stage the page holding the frontier in the TIB, and AND its words
     # together: -1 means the page is still fully erased
-    andi a0, tp, -FLASH_PAGE    # a0 = page address
+    lw a2, 0(sp)                # a2 = frontier
+    andi a0, a2, -FLASH_PAGE    # a0 = page address
     mv a3, a0
     li a4, TIB_BOTTOM
     li a5, -1
@@ -231,7 +233,7 @@ log_commit_stage:
     addi a4, a4, CELL
     bne a3, t1, log_commit_stage
     # merge in the batch bytes that fall into this page
-    sub a3, tp, a0              # a3 = frontier offset in the page
+    sub a3, a2, a0              # a3 = frontier offset in the page
     li a4, TIB_BOTTOM
     add a4, a4, a3
 log_commit_merge:
@@ -239,13 +241,14 @@ log_commit_merge:
     sb t2, 0(a4)
     addi a1, a1, 1
     addi a4, a4, 1
-    addi tp, tp, 1
     addi a3, a3, 1
     addi gp, gp, -1
     beqz gp, log_commit_tail
     li t1, FLASH_PAGE
     bltu a3, t1, log_commit_merge
 log_commit_tail:
+    add t1, a0, a3
+    sw t1, 0(sp)                # the frontier is now after the merged bytes
     # everything after the new bytes stays erased
     li t1, FLASH_PAGE
     li t2, 0xFF
@@ -275,8 +278,9 @@ log_commit_verify:
     bne a3, a5, log_commit_verify
     bnez gp, log_commit_page    # the batch continues on the next page
 log_commit_done:
+    lw t1, 0(sp)
     li t0, LOGEND
-    sw tp, 0(t0)                # advance the frontier
+    sw t1, 0(t0)                # advance the frontier
     j log_commit_drop
 
 log_commit_off:
@@ -291,8 +295,8 @@ log_commit_drop:
     li t0, LOGPND
     sw zero, 0(t0)
 log_commit_exit:
-    lw ra, 0(s0)                # restore ra from the return stack
-    addi s0, s0, CELL
+    lw ra, CELL(sp)             # restore ra, drop the two cells
+    addi sp, sp, 2*CELL
     ret
 
 msg_logoff: .ascii "  ? log off\n"

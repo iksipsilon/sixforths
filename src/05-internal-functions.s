@@ -180,13 +180,16 @@ search_order_done:
 # returns: a1 = address of the word header (a0 is preserved). A word that is
 # not found ends in the error handler, which also drops a half-built
 # definition (abandon_def).
-# clobbers: t0, t1, t2, a2, a3, a4, a5, gp, tp
+# clobbers: t0, t1, t2, a2, a3, a4, a5, gp
 lookup:
-    mv tp, ra                   # search_order is called below
+    addi sp, sp, -CELL          # search_order is called below: ra goes on
+    sw ra, 0(sp)                # the machine stack
     call search_order
+    lw ra, 0(sp)
+    addi sp, sp, CELL
     beqz a2, err_error          # not found
     mv a1, a2                   # return the word header address in X
-    jr tp
+    ret
 
 .balign CELL
 # make_header: build a dictionary header at HERE
@@ -195,7 +198,7 @@ lookup:
 # leaves HERE just after the code field and LATEST pointing at the new word.
 # Same layout and bounds check as ':' in 08-primitives.s.
 # HERE is rounded up to a CELL boundary first, so a header can follow `c,`.
-# clobbers: t0, t1, t2, a0, a4, a5, gp, tp
+# clobbers: t0, t1, t2, a0, a4, a5, gp
 make_header:
     li t0, var_HERE
     lw t2, 0(t0)
@@ -205,8 +208,8 @@ make_header:
     addi a5, a5, 2*CELL         # ...+ link + count byte + alignment slack
     andi a5, a5, -CELL          # a5 = code field address
     addi gp, a5, CELL           # gp = new HERE
-    li tp, DICT_TOP-CELL        # keep one spare cell: CREATE reserves it for DOES>
-    bge gp, tp, err_mem         # dictionary full
+    li t0, DICT_TOP-CELL        # keep one spare cell: CREATE reserves it for DOES>
+    bge gp, t0, err_mem         # dictionary full
     li t1, var_CURRENT
     lw t1, 0(t1)                # head cell of the vocabulary definitions go to
     lw a4, 0(t1)

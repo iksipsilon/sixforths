@@ -88,9 +88,9 @@ t("?dup", "5 ?dup . . 0 ?dup .", "5 5 0 ")
 t("+!", "variable v 5 v ! 3 v +! v @ .", "8 ")
 t("depth and .s", "1 2 3 depth . .s", "3 1 2 3 ")
 
-# 50 loop results plus the two loop parameters of the second loop = 52 cells
-t("52 cells fit on the data stack", ": f52 50 0 do i loop 50 0 do drop loop 65 emit ; f52", "f52\nA")
-t("the 53rd overflows", ": f53 51 0 do i loop 51 0 do drop loop 65 emit ; f53", "? stack overflow", absent=("f53\nA",))
+# 38 loop results plus the two loop parameters of the second loop = 40 cells
+t("40 cells fit on the data stack", ": f40 38 0 do i loop 38 0 do drop loop 65 emit ; f40", "f40\nA")
+t("the 41st overflows", ": f41 39 0 do i loop 39 0 do drop loop 65 emit ; f41", "? stack overflow", absent=("f41\nA",))
 t("sp@", "7 sp@ @ .", "7 ")
 
 # ---- memory ----
@@ -397,12 +397,17 @@ pending = e.stk_cntif
 e.csr[0x300] |= 8
 out, _ = h.feed(e, "irqs 20 ms irqs swap - dup 9 < . 11 > .\n")
 check("after a 30 ms stall the tick goes on", e, out + f" pending={pending}", ["\n0 0 ", "pending=1"])
-e, out, _ = h.session(P, ": deep 40 0 do i loop 20 ms 0 40 0 do swap 39 i - <> if 1+ then loop ; deep .\n")
-check("a 40-cell data stack survives 20 ms of ticks", e, out + f" enough={e.irqs_taken - P.irqs_taken >= 9}",
+e, out, _ = h.session(P, ": deep 36 0 do i loop 20 ms 0 36 0 do swap 35 i - <> if 1+ then loop ; deep .\n")
+check("a 36-cell data stack survives 20 ms of ticks", e, out + f" enough={e.irqs_taken - P.irqs_taken >= 9}",
       ["deep .\n0 ", "enough=True"])
 t("the tick runs after reboot", "reboot\nirqs 20 ms irqs swap - dup 9 < . 11 > .", "\n0 0 ")
 t("the tick runs after an error", "nosuchword\nirqs 20 ms irqs swap - dup 9 < . 11 > .", "\n0 0 ", absent=())
-# a tick just before any instruction of reset (the error path) does no harm: sp never half set
+# the data stack pointer is not sp any more: a wild one ends in an error, not in a trap
+t("0 sp! then ticks: an error, no trap", "0 sp! 20 ms 1\n65 emit", "emit\nA", absent=("T0",))
+# the error message does not go through the return stack pointer
+t("0 rp! then an error: the message, no trap", "0 rp! nosuchword\n65 emit", "nosuchword\n  ?", "emit\nA", absent=("T0",))
+t("an sp! above the stack: an error, no trap", "-4 sp! 20 ms 1\n65 emit", "emit\nA", absent=("T0",))
+# a tick just before any instruction of reset (the error path) does no harm: sp is always whole
 lo, hi = h.SYM["reset"], h.SYM["ram_init"]
 e = copy.deepcopy(P); e.uart_in = list(b"nosuchword\n")
 seen = []

@@ -47,25 +47,25 @@ hardware.
 
 ## Forth architecture
 
-- Registers: `sp` = DSP (data stack), `s0` = RSP (return stack), `s1` = IP, `a0` = W.
-  How to remember them: the three registers that start with "s" are the three Forth
-  pointers, and W is the first argument register (NEXT hands W to the code-field routine).
-  `sp`, `s0`, `s1` are also the registers no subroutine and no interrupt touches.
+- Registers (changed 2026-11-14): `s0` = DSP (data stack), `tp` = RSP (return stack),
+  `s1` = IP, `a0` = W (NEXT hands W to the code-field routine). **`sp` is the machine
+  stack**, not a Forth stack: the QingKe V2 stacks its 48-byte interrupt frame there
+  (hardware prologue, processor manual 3.4), and nested subroutines keep `ra` there
+  (`addi sp, sp, -CELL` / `sw ra, 0(sp)` ... `lw ra, 0(sp)` / `addi sp, sp, CELL`).
+  `s0`, `tp`, `s1` are the registers no subroutine and no interrupt touches.
   Registers keep their ABI names in the source; there are no aliases.
-- Scratch inside a primitive: `t0-t2`, `a1-a5`, `gp`, `tp`. Prefer `a1-a5` in new code: the
-  2-byte forms of `lw` / `sw` through a pointer, `and` / `or` / `xor` / `sub` and `beqz` /
-  `bnez` only take `s0`, `s1`, `a0-a5`. **`t0` is clobbered by PUSH / PUSHRSP / POPRSP /
-  checkunderflow** (not by POP). **NEXT clobbers `a5`.** `ra` is for `call` / `ret` only.
-- **Nothing may be stored below `sp`.** The QingKe V2 stacks its 48-byte interrupt frame at
-  `sp` (hardware prologue, processor manual 3.4), and `sp` is the data stack. PUSH and
-  PUSHRSP therefore move the pointer first, then store; to push `sp` itself, copy it to a
-  register first (see `sp@`). `IRQ_FRAME` (48 bytes) stays free under the data stack for one
-  frame, so it holds 52 cells and interrupts must not nest. **`sp` must change in one
-  instruction**: `la sp, x` takes two, and a tick between them stores its frame through a
-  half-built `sp` (load the address into a register, then `mv sp`; `reset` uses
-  `li sp, DSP_TOP`, a single `lui` because DSP_TOP's low 12 bits are 0, which the build
-  checks). The tick is on from
-  `reset` onwards, so this holds for all code that runs after boot.
+- Scratch inside a primitive: `t0-t2`, `a1-a5`, `gp`. Prefer `a1-a5` in new code: the
+  2-byte forms of `lw` / `sw` through a pointer (the data stack's `s0` included), `and` /
+  `or` / `xor` / `sub` and `beqz` / `bnez` only take `s0`, `s1`, `a0-a5`, for both
+  registers. **`t0` is clobbered by PUSH / PUSHRSP / POPRSP / checkunderflow** (not by
+  POP). **NEXT clobbers `a5`.** `ra` is for `call` / `ret` only.
+- The machine stack is 96 bytes (`MSTACK_SIZE`: one frame + 12 cells), under the data
+  stack; `boot` and `reset` empty it (`li t0, MSP_TOP` / `mv sp, t0`: `sp` gets its value
+  in one instruction). A primitive must leave `sp` as it found it; a jump to an `err_*`
+  label from inside a subroutine is fine, because `reset` empties the stack. Interrupts
+  must not nest. PUSH and PUSHRSP move the pointer first, then store, so to push `s0`
+  itself copy it to a register first (see `sp@`). The emulator faults if an interrupt
+  finds `sp` outside the machine stack or without room for a frame.
 - Indirect threaded. Word header: link cell, flags+length byte, name, zero padding to
   a cell boundary, then the code field. Flags: `F_IMMEDIATE` 0x80, `F_HIDDEN` 0x20,
   `F_LENMASK` 0x1f, so **names are at most 31 characters**.
@@ -105,7 +105,7 @@ hardware.
 
 - Flash 0x00000000: kernel + `.rodata`, **must stay under 16 KiB** (`FLASH` `LENGTH` in
   `linker.ld` at the repo root; confirm it says 16k).
-  Currently 13,592 bytes (182 words). Report the size after every change.
+  Currently 13,956 bytes (182 words). Report the size after every change.
 - Flash 0x08004000-0x08006800: source-replay log (10 KiB).
 - Flash 0x08006800-0x0800F800 (`USER_FLASH`..`FLASH_TOP`, 36 KiB): the application's own
   data, written a 256-byte page at a time with `fpage-erase ( page -- )` and
@@ -118,7 +118,8 @@ hardware.
   boot**: every kernel word lives in flash.
   `FORTH_SIZE` = 0x19B4 = **6,580 bytes** of dictionary budget, up to `DICT_TOP` (which is
   `MRING` now).
-- RAM, top down: `DSP_TOP` 0x20002000, `RSP_TOP` 0x20001F00, `TIB_TOP` 0x20001E00,
+- RAM, top down: `DSP_TOP` 0x20002000 (the data stack, 40 cells), `MSP_TOP` 0x20001F60
+  (the machine stack, 96 bytes), `RSP_TOP` 0x20001F00, `TIB_TOP` 0x20001E00,
   `TIB_BOTTOM` 0x20001D00 (256 B), `var_STATE` 0x20001CFC, `var_TOIN` 0x20001CF8,
   `var_HERE` 0x20001CF4, `var_LATEST` 0x20001CF0, then log bookkeeping, `var_BASE`
   0x20001CD8, `var_HLD`, `var_CONTEXT`, `var_CURRENT`, `var_VOCLINK` 0x20001CC8, `var_MRD`,
@@ -240,8 +241,8 @@ Layout:
 4. Hardware tests over UART: sync on the echo after every line, and wait for `ok` or `?`
    rather than for a pause (a line like `5000 ms` prints nothing for seconds, and the
    board does not read the UART meanwhile); save and restore
-   `here` / `latest`; run the Forth words `s0 sp!` between tests (Forth `s0` = data-stack base, unrelated to
-   register `s0`); start from a known state (log wiped
+   `here` / `latest`; run the Forth words `s0 sp!` between tests (the Forth word `s0` = data-stack base; the
+   register `s0` is the data stack pointer); start from a known state (log wiped
    or PD4 held); treat a `T<mcause> <mepc>` line as a failed test, then reset the chip
    with minichlink.
 5. Work on a feature branch (the current one is `kernel-phase1`, cut from
@@ -273,8 +274,11 @@ Still open from before:
 
 **Where we stopped (2026-11-12): waiting for the display and key hardware**, which may
 take more than a month.
-- The board runs commit `3b085aa` (13,592 bytes; flashed 2026-11-14: `reset` sets `sp` with
-  `li sp, DSP_TOP`). Checked there: boot, an error with 3 cells on the stack and one inside
+- **Not flashed yet (2026-11-14):** the kernel with the machine stack on `sp` (`s0` = DSP,
+  `tp` = RSP; 13,956 bytes) passes in the emulator only. On the board, repeat the checks
+  listed below, plus `0 rp! nosuchword` (must print `?`, not a `T...` line).
+- The board runs commit `3b085aa` (13,592 bytes; flashed 2026-11-14: `sp` was still the
+  data stack there). Checked there: boot, an error with 3 cells on the stack and one inside
   a definition (both leave `depth` 0), 40 cells through 1000 ms of ticks (500 ticks, the
   sum intact), `reboot`. Flashing printed one stray byte before the banner; a plain
   `minichlink -b` reset did not. Its source log is empty, so
@@ -308,9 +312,10 @@ Rules for all of it:
 - A device gets its own numbered file with its machine code and its words (`14-modem.s`,
   `15-display.s`, ...); pin and register equates go to `mcu.s`. Keep one pin table in this
   file once pins are assigned (the QFN20 has few: count them before promising one).
-- Interrupts: at most **one**, and it must not nest. Its routine may use only `ra`,
-  `t0-t2`, `a0-a5` (the hardware prologue saves exactly those) and must not touch `sp`,
-  `s0`, `s1`, `gp`, `tp`. The one interrupt is the tick (step 5a), vector table entry 12;
+- Interrupts: at most **one**, and it must not nest. Its routine may use `ra`,
+  `t0-t2`, `a0-a5` freely (the hardware prologue saves exactly those); to use `s0`, `s1`,
+  `gp` or `tp` it must save them on the machine stack (`sp`) and restore them, within the
+  12 cells `MSTACK_SIZE` leaves. The one interrupt is the tick (step 5a), vector table entry 12;
   another would need the table extended to its number. HPE and the vector mode are set in CSRs described in
   `docs/ch32v006/QingKeV2_Processor_Manual.PDF` chapter 3.
 - Everything that waits (for the modem, for a key) needs a timeout. A phone must not hang.

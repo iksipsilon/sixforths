@@ -4,12 +4,12 @@
 
 # board boot initializations
 boot:
-    # CH32V006 PORT BUGFIX: uart_print (called below for the boot banner) now
-    # spills ra to the return stack, so RSP (s0) must be valid *before* the
-    # first call to it -- reset: only initializes s0 later. Without this, the
-    # banner-print stores through s0 == 0 (QingKe registers reset to zero),
-    # faults, and the stub mret handler loops on the fault forever.
-    li s0, RSP_TOP      # initialize RSP register early (reset: re-inits it, harmlessly)
+    # CH32V006 PORT: the machine stack first, for interrupt frames (HPE) and
+    # the return addresses of nested subroutines (uart_print, called below
+    # for the banner, keeps ra there). Interrupts are off after a hardware
+    # reset; after `reboot` sp is still valid from before.
+    li t0, MSP_TOP
+    mv sp, t0
 
     call interrupt_init # RISC-V interrupt CSR initialization
     call uart_init      # board specific UART initialization
@@ -91,19 +91,17 @@ reset_replay_done:
     sw zero, 0(t0)      # drop any pending (uncommitted) log batch
 
     # initialize stack pointers
-    # CH32V006 PORT: sp changes in one instruction (la takes two): the tick
-    # interrupt's HPE stores its frame below sp at any moment. li of an
-    # address whose low 12 bits are 0 is a single lui; any other address
-    # would take lui + addi, so the build stops instead.
-    .if DSP_TOP & 0xFFF
-    .error "DSP_TOP is not 4 KiB aligned: li sp, DSP_TOP would take two instructions"
-    .endif
-    li sp, DSP_TOP              # initialize DSP register (one lui)
-    # CH32V006 PORT: interrupts on (the tick, 13-ticks.s), now that sp is valid.
+    # CH32V006 PORT: the machine stack is emptied too: an error may have left
+    # a subroutine's return address on it. sp gets its value in one
+    # instruction (mv), so a tick always finds a whole sp.
+    li t0, MSP_TOP
+    mv sp, t0
+    li s0, DSP_TOP              # initialize DSP register
+    # CH32V006 PORT: interrupts on (the tick, 13-ticks.s).
     # At boot this is the first time; after an error they are on already.
     csrs mstatus, 0x08
     la s1, interpreter_start    # initialize IP register
-    li s0, RSP_TOP              # initialize RSP register
+    li tp, RSP_TOP              # initialize RSP register
 
     # initialize function parameters
     mv a0, zero         # initialize W register

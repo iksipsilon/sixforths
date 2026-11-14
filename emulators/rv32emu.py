@@ -44,6 +44,11 @@ class Emu:
         # the WCH-LinkE's RX pull-up, so PD4 reads low only while PD5 is a
         # general-purpose output driving 0 (checked on the board)
         self.weact_bridge = False
+        # the machine stack, (lowest address, top): when set, an interrupt
+        # taken with sp outside it, or with no room for the 48-byte HPE frame,
+        # faults. min_sp is the lowest sp any frame has reached.
+        self.mstack = None
+        self.min_sp = None
         # SysTick (reference manual 6.5.4): a 32-bit up-counter on HCLK/8
         # (STCLK = 0) or HCLK (STCLK = 1). The model counts one HCLK cycle per
         # instruction, so its times are not the chip's; the order of events
@@ -129,6 +134,10 @@ class Emu:
         if not self.csr.get(0x804, 0) & 1 or self.csr.get(0x804, 0) & 2 or mtvec & 3 != 3:
             self.fault = ("irq-setup-unmodelled", self.pc, self.csr.get(0x804, 0)); raise RuntimeError()
         sp = self.x[2]
+        if self.mstack and not self.mstack[0] + 48 <= sp <= self.mstack[1]:
+            self.fault = ("irq-sp-outside-machine-stack", self.pc, sp); raise RuntimeError()
+        if self.min_sp is None or sp - 48 < self.min_sp:
+            self.min_sp = sp - 48
         for off, r in zip(range(4, 44, 4), (1, 5, 6, 7, 10, 11, 12, 13, 14, 15)):
             self.w32((sp - off) & M32, self.x[r])
         self.x[2] = (sp - 48) & M32

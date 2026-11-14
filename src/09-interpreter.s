@@ -127,12 +127,12 @@ process_token:
     bgtu a1, t0, err_token  # error if token size is greater than 31
 
     # check if the token is a number
-    mv gp, a0               # save a0 temporarily
-    mv tp, a1               # save a1 temporarily
+    mv a2, a0               # save a0 temporarily (number leaves a2 and a3 alone)
+    mv a3, a1               # save a1 temporarily
     call number             # try to convert the token to an integer
     beqz a1, push_number    # push the token to the stack or memory if it's a number
-    mv a0, gp               # restore a0
-    mv a1, tp               # restore a1
+    mv a0, a2               # restore a0
+    mv a1, a3               # restore a1
 
     # CH32V006 PORT: look the token up by name (a0 = address, a1 = length)
     call lookup             # search the context vocabulary, then FORTH;

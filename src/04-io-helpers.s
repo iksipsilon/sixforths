@@ -61,13 +61,11 @@ uart_put_loop:
 # arguments: a1 = address of the message to be printed, a2 = address+length of the message
 uart_print:
     # CH32V006 PORT: s3 does not exist on RV32E. Instead of holding ra in a
-    # register across the nested call, spill it to the Forth return stack.
-    # Deliberately NOT using the PUSHRSP/POPRSP macros here: their bounds check
-    # jumps to err_overflow, which prints via uart_print -> infinite recursion
-    # if the RSP were ever exhausted. uart_print nests exactly one cell deep,
-    # so an unchecked push is safe (and clobbers no temporaries).
-    addi s0, s0, -CELL          # make room on the return stack (RSP)
-    sw ra, 0(s0)                # save the return address on the return stack
+    # register across the nested call, it goes on the machine stack. Not on
+    # Forth's return stack: the error messages are printed with this routine,
+    # and after an error the RSP may hold anything.
+    addi sp, sp, -CELL
+    sw ra, 0(sp)                # save the return address
 uart_print_loop:
     beq a1, a2, uart_print_done # done if we've printed all characters
     lbu a0, 0(a1)               # load 1 character from the message string
@@ -75,8 +73,8 @@ uart_print_loop:
     addi a1, a1, 1              # increment the address by 1
     j uart_print_loop           # loop to print the next message
 uart_print_done:
-    lw ra, 0(s0)                # CH32V006 PORT: restore the return address from the RSP
-    addi s0, s0, CELL           # drop it from the return stack
+    lw ra, 0(sp)                # restore the return address
+    addi sp, sp, CELL
     ret
 
 ##
@@ -95,8 +93,8 @@ out_put:
 # print a string through the output vector, like uart_print does to the console
 # arguments: a1 = start, a2 = end; clobbers: a0, a1, t0, t1
 out_print:
-    addi s0, s0, -CELL          # spill ra to the return stack, unchecked, as
-    sw ra, 0(s0)                # uart_print does (one cell deep)
+    addi sp, sp, -CELL          # ra goes on the machine stack, as in
+    sw ra, 0(sp)                # uart_print
 out_print_loop:
     beq a1, a2, out_print_done
     lbu a0, 0(a1)
@@ -104,8 +102,8 @@ out_print_loop:
     addi a1, a1, 1
     j out_print_loop
 out_print_done:
-    lw ra, 0(s0)
-    addi s0, s0, CELL
+    lw ra, 0(sp)
+    addi sp, sp, CELL
     ret
 
 # is a console character waiting? a0 = -1 if one is, else 0. clobbers t0, t1

@@ -4,8 +4,8 @@
 
 # jump to the next subroutine (ITC), appended to each primitive
 # CH32V006 PORT: the temporary is a5, not t0. The 2-byte forms of lw/sw
-# through a pointer only take s0, s1 and a0-a5, so with IP = s1, W = a0 and
-# a5 all four instructions are compressed: 8 bytes instead of 10 for every
+# through a pointer only take s0, s1 and a0-a5 (both registers), so with
+# IP = s1, W = a0 and a5 all four instructions are compressed: 8 bytes instead of 10 for every
 # NEXT. Nothing is live in a5 when a word ends.
 .macro NEXT
     lw a0, 0(s1)        # load memory address from IP into W
@@ -16,42 +16,38 @@
 
 # pop top of data stack to register and move DSP
 .macro POP reg
-    lw \reg, 0(sp)      # load DSP value to register
-    addi sp, sp, CELL   # move the DSP up by 1 cell
+    lw \reg, 0(s0)      # load DSP value to register
+    addi s0, s0, CELL   # move the DSP up by 1 cell
 .endm
 
 # push register to top of stack and move DSP
-# CH32V006 PORT: the DSP moves first, then the store. sp is the data stack,
-# and the QingKe V2 stacks its interrupt frame at sp (hardware prologue, 48
-# bytes, processor manual 3.4): a cell stored below sp before sp moved could
-# be overwritten by an interrupt arriving between the two instructions.
-# IRQ_FRAME bytes stay free under the deepest cell for that frame. (The new
-# order is also 2 bytes shorter: a negative offset cannot be compressed.)
-# Do not PUSH sp itself: copy it to a register first (see sp@).
+# CH32V006 PORT: the DSP moves first, then the store (2 bytes shorter: a
+# negative offset cannot be compressed). So do not PUSH s0 itself: copy it to
+# a register first (see sp@).
 .macro PUSH reg
-    li t0, RSP_TOP+CELL+IRQ_FRAME   # lowest DSP that still has room for a cell
-    blt sp, t0, err_overflow    # jump to error handler if stack overflow
+    li t0, MSP_TOP+CELL         # lowest DSP that still has room for a cell
+    blt s0, t0, err_overflow    # jump to error handler if stack overflow
 
-    addi sp, sp, -CELL  # move the DSP down by 1 cell
-    sw \reg, 0(sp)      # store the value in the register to the top of the DSP
+    addi s0, s0, -CELL  # move the DSP down by 1 cell
+    sw \reg, 0(s0)      # store the value in the register to the top of the DSP
 .endm
 
 # push register to return stack
 .macro PUSHRSP reg
     li t0, TIB_TOP+CELL         # load address of bottom of stack + 1 CELL
-    blt s0, t0, err_overflow    # jump to error handler if stack overflow
+    blt tp, t0, err_overflow    # jump to error handler if stack overflow
 
-    addi s0, s0, -CELL  # decrement RSP by 1 cell
-    sw \reg, 0(s0)      # store value from register into RSP
+    addi tp, tp, -CELL  # decrement RSP by 1 cell
+    sw \reg, 0(tp)      # store value from register into RSP
 .endm
 
 # pop top of return stack to register
 .macro POPRSP reg
     li t0, RSP_TOP              # load address of top of RSP
-    bge s0, t0, err_underflow   # jump to error handler if stack underflow
+    bge tp, t0, err_underflow   # jump to error handler if stack underflow
 
-    lw \reg, 0(s0)      # load value from RSP into register
-    addi s0, s0, CELL   # increment RSP by 1 cell
+    lw \reg, 0(tp)      # load value from RSP into register
+    addi tp, tp, CELL   # increment RSP by 1 cell
 .endm
 
 # Dictionary words, as in jonesforth
@@ -128,5 +124,5 @@ code_\label :                   # machine code follows, ending with NEXT
 # check for stack underflow
 .macro checkunderflow stacktop
     li t0, DSP_TOP-\stacktop    # load address of top of stack
-    bge sp, t0, err_underflow   # jump to error handler if stack underflow
+    bge s0, t0, err_underflow   # jump to error handler if stack underflow
 .endm

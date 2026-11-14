@@ -9,11 +9,12 @@
 # end, so a word near the end of this file is found fastest. The log words
 # (+log -log wipe) live with their machinery in 12-flash-log.s.
 #
-# Registers: sp = DSP (data stack), s0 = RSP (return stack), s1 = IP,
-# a0 = W. These are the three "s" registers plus the first argument register:
-# NEXT hands W to the code-field routine like an argument. Everything else is
-# scratch inside a primitive: t0-t2, a1-a5, gp, tp. Prefer a1-a5 in new code
-# (they allow 2-byte instructions where t0-t2, gp and tp do not).
+# Registers: s0 = DSP (data stack), tp = RSP (return stack), s1 = IP,
+# a0 = W (NEXT hands W to the code-field routine like an argument). sp is the
+# machine stack: interrupt frames and the return addresses of nested
+# subroutines; a primitive leaves it as it found it. Everything else is
+# scratch inside a primitive: t0-t2, a1-a5, gp. Prefer a1-a5 in new code
+# (with s0 they allow 2-byte instructions where t0-t2 and gp do not).
 #   t0 is clobbered by PUSH, PUSHRSP, POPRSP and checkunderflow (POP leaves
 #   it alone). NEXT clobbers a5.
 #   checkunderflow N*CELL guards N+1 items (checkunderflow 0 guards 1 item).
@@ -133,15 +134,15 @@ defcode "xdo",3,,XDO
 # xloop ( -- ; R: sys sys -- | sys sys )   Step by 1; the next cell is the
 # absolute branch target taken while looping
 defcode "xloop",5,,XLOOP
-    lw t1, 0(s0)                # biased index
+    lw t1, 0(tp)                # biased index
     addi t2, t1, 1
     slt a1, t2, t1              # signed overflow of +1 <=> new < old
     bnez a1, xloop_done
-    sw t2, 0(s0)
+    sw t2, 0(tp)
     lw s1, 0(s1)                # loop again: IP = target cell
     NEXT
 xloop_done:
-    addi s0, s0, 2*CELL         # drop the loop frame
+    addi tp, tp, 2*CELL         # drop the loop frame
     addi s1, s1, CELL           # skip the target cell
     NEXT
 
@@ -150,32 +151,32 @@ xloop_done:
 defcode "xplusloop",9,,XPLUSLOOP
     checkunderflow 0
     POP a2                      # n
-    lw t1, 0(s0)                # biased index
+    lw t1, 0(tp)                # biased index
     add t2, t1, a2
     slt a1, t2, t1
     slti a3, a2, 0
     xor a1, a1, a3
     bnez a1, xploop_done
-    sw t2, 0(s0)
+    sw t2, 0(tp)
     lw s1, 0(s1)
     NEXT
 xploop_done:
-    addi s0, s0, 2*CELL
+    addi tp, tp, 2*CELL
     addi s1, s1, CELL
     NEXT
 
 # i ( -- n ; R: sys sys -- sys sys )   Innermost loop index
 defcode "i",1,,IDX
-    lw t1, 0(s0)
-    lw t2, CELL(s0)
+    lw t1, 0(tp)
+    lw t2, CELL(tp)
     sub t1, t1, t2
     PUSH t1
     NEXT
 
 # j ( -- n )            Second loop index (the next loop out)
 defcode "j",1,,JDX
-    lw t1, 2*CELL(s0)
-    lw t2, 3*CELL(s0)
+    lw t1, 2*CELL(tp)
+    lw t2, 3*CELL(tp)
     sub t1, t1, t2
     PUSH t1
     NEXT
@@ -183,8 +184,8 @@ defcode "j",1,,JDX
 # unloop ( -- ; R: sys sys -- )   Drop the loop frame (needed before exit)
 defcode "unloop",6,,UNLOOP
     li t0, RSP_TOP-CELL         # need two cells on the return stack
-    bge s0, t0, err_underflow
-    addi s0, s0, 2*CELL
+    bge tp, t0, err_underflow
+    addi tp, tp, 2*CELL
     NEXT
 
 # litstring ( -- addr len )   Runtime of s": the thread holds a length cell, then
@@ -240,56 +241,56 @@ defcode "xdoes",5,,XDOES
 # drop ( x -- )         Discard the top of the data stack
 defcode "drop",4,,DROP
     checkunderflow 0    # need 1 item
-    addi sp, sp, CELL   # move the DSP up by 1 cell
+    addi s0, s0, CELL   # move the DSP up by 1 cell
     NEXT
 
 # dup ( x -- x x )      Duplicate the top of the data stack
 defcode "dup",3,,DUP
     checkunderflow 0    # need 1 item
-    lw t1, 0(sp)        # load the top of the stack
+    lw t1, 0(s0)        # load the top of the stack
     PUSH t1             # push a copy (PUSH clobbers t0)
     NEXT
 
 # swap ( a b -- b a )   Exchange the top two items
 defcode "swap",4,,SWAP
     checkunderflow CELL # need 2 items
-    lw t1, 0(sp)        # b
-    lw t2, CELL(sp)     # a
-    sw t1, CELL(sp)
-    sw t2, 0(sp)
+    lw t1, 0(s0)        # b
+    lw t2, CELL(s0)     # a
+    sw t1, CELL(s0)
+    sw t2, 0(s0)
     NEXT
 
 # over ( a b -- a b a ) Push a copy of the second item
 defcode "over",4,,OVER
     checkunderflow CELL # need 2 items
-    lw t1, CELL(sp)     # a
+    lw t1, CELL(s0)     # a
     PUSH t1
     NEXT
 
 # rot ( a b c -- b c a )
 defcode "rot",3,,ROT
     checkunderflow 2*CELL
-    lw t1, 0(sp)                # c
-    lw t2, CELL(sp)             # b
-    lw a1, 2*CELL(sp)           # a
-    sw a1, 0(sp)
-    sw t1, CELL(sp)
-    sw t2, 2*CELL(sp)
+    lw t1, 0(s0)                # c
+    lw t2, CELL(s0)             # b
+    lw a1, 2*CELL(s0)           # a
+    sw a1, 0(s0)
+    sw t1, CELL(s0)
+    sw t2, 2*CELL(s0)
     NEXT
 
 # nip ( a b -- b )
 defcode "nip",3,,NIP
     checkunderflow CELL
-    lw t1, 0(sp)
-    addi sp, sp, CELL
-    sw t1, 0(sp)
+    lw t1, 0(s0)
+    addi s0, s0, CELL
+    sw t1, 0(s0)
     NEXT
 
 # 2dup ( a b -- a b a b )
 defcode "2dup",4,,TWODUP
     checkunderflow CELL
-    lw t1, 0(sp)                # b
-    lw t2, CELL(sp)             # a
+    lw t1, 0(s0)                # b
+    lw t2, CELL(s0)             # a
     PUSH t2
     PUSH t1
     NEXT
@@ -297,13 +298,13 @@ defcode "2dup",4,,TWODUP
 # 2drop ( a b -- )
 defcode "2drop",5,,TWODROP
     checkunderflow CELL
-    addi sp, sp, 2*CELL
+    addi s0, s0, 2*CELL
     NEXT
 
 # ?dup ( x -- 0 | x x )
 defcode "?dup",4,,QDUP
     checkunderflow 0
-    lw t1, 0(sp)
+    lw t1, 0(s0)
     beqz t1, qdup_done
     PUSH t1
 qdup_done:
@@ -312,7 +313,7 @@ qdup_done:
 # sp@ ( -- addr )       Get current data stack pointer (the address of the
 # top cell before sp@ pushed its result)
 defcode "sp@",3,,DSPFETCH
-    mv t1, sp           # PUSH moves the DSP before it stores
+    mv t1, s0           # PUSH moves the DSP before it stores, hence the copy
     PUSH t1             # store DSP in the top of the stack
     NEXT
 
@@ -320,7 +321,7 @@ defcode "sp@",3,,DSPFETCH
 defcode "sp!",3,,DSPSTORE
     checkunderflow 0    # need 1 item
     POP t1
-    mv sp, t1
+    mv s0, t1
     NEXT
 
 # s0 ( -- a )           Address just above the data stack's first cell
@@ -333,7 +334,7 @@ defcode "s0",2,,SZERO
 # depth ( -- n )        Number of cells on the data stack
 defcode "depth",5,,DEPTH
     li t1, DSP_TOP
-    sub t1, t1, sp              # bytes in use
+    sub t1, t1, s0              # bytes in use
     srai t1, t1, 2              # cells
     PUSH t1
     NEXT
@@ -358,21 +359,21 @@ defcode "r>",2,,FROMR
 # r@ ( -- x ; R: x -- x ) Copy the top of the return stack
 defcode "r@",2,,RFETCH
     li t0, RSP_TOP              # RSP underflow check without popping
-    bge s0, t0, err_underflow
-    lw t1, 0(s0)
+    bge tp, t0, err_underflow
+    lw t1, 0(tp)
     PUSH t1
     NEXT
 
 # rp@ ( -- addr )       Get current return stack pointer
 defcode "rp@",3,,RSPFETCH
-    PUSH s0             # store RSP in the top of the stack
+    PUSH tp             # store RSP in the top of the stack
     NEXT
 
 # rp! ( a -- )          Set the return stack pointer
 defcode "rp!",3,,RSPSTORE
     checkunderflow 0    # need 1 item
     POP t1
-    mv s0, t1
+    mv tp, t1
     NEXT
 
 # r0 ( -- a )           Address just above the return stack's first cell
@@ -388,26 +389,26 @@ defcode "r0",2,,RZERO
 # @ ( addr -- x )       Fetch memory at addr
 defcode "@",1,,FETCH
     checkunderflow 0    # check for stack underflow of data stack (1 CELL)
-    lw t0, 0(sp)        # load the top of stack into temporary
+    lw t0, 0(s0)        # load the top of stack into temporary
     lw t0, 0(t0)        # load the value from the temporary (addr)
-    sw t0, 0(sp)        # store the value back the top of stack (x)
+    sw t0, 0(s0)        # store the value back the top of stack (x)
     NEXT
 
 # ! ( x addr -- )       Store x at addr
 defcode "!",1,,STORE
     checkunderflow CELL # check for stack underflow of data stack (2 CELLs)
-    lw t1, 0(sp)        # load the DSP value (addr) into temporary
-    lw t0, CELL(sp)     # load the DSP value (x) into temporary
+    lw t1, 0(s0)        # load the DSP value (addr) into temporary
+    lw t0, CELL(s0)     # load the DSP value (x) into temporary
     sw t0, 0(t1)        # store x into addr
-    addi sp, sp, 2*CELL # move DSP up by 2 cells
+    addi s0, s0, 2*CELL # move DSP up by 2 cells
     NEXT
 
 # c@ ( a -- c )         Fetch one byte from address a
 defcode "c@",2,,CFETCH
     checkunderflow 0    # need 1 item
-    lw t1, 0(sp)        # load the address
+    lw t1, 0(s0)        # load the address
     lbu t1, 0(t1)       # load the byte (any alignment is fine for lbu)
-    sw t1, 0(sp)        # replace the top of the stack in place
+    sw t1, 0(s0)        # replace the top of the stack in place
     NEXT
 
 # c! ( c a -- )         Store the byte c at address a
@@ -550,8 +551,8 @@ defcode "align",5,,ALIGN
 # move ( src dst u -- ) Copy u bytes; the regions may overlap either way
 defcode "move",4,,MOVE
     checkunderflow 2*CELL
-    lw a1, 2*CELL(sp)           # src
-    lw a2, CELL(sp)             # dst
+    lw a1, 2*CELL(s0)           # src
+    lw a2, CELL(s0)             # dst
     bltu a1, a2, code_CMOVEUP   # dst above src: copy from the top down
     j code_CMOVE                # otherwise from the bottom up
 
@@ -563,115 +564,115 @@ defcode "move",4,,MOVE
 defcode "+",1,,ADD
     checkunderflow CELL # check for stack underflow of data stack (2 CELLs)
     POP t0              # pop DSP value (x1) into temporary
-    lw t1, 0(sp)        # load DSP value (x2) into temporary
+    lw t1, 0(s0)        # load DSP value (x2) into temporary
     add t0, t0, t1      # add the two values
-    sw t0, 0(sp)        # store the value into the top of the stack
+    sw t0, 0(s0)        # store the value into the top of the stack
     NEXT
 
 # - ( a b -- a-b )      Subtraction
 defcode "-",1,,SUB
     checkunderflow CELL # need 2 items
     POP t1              # b
-    lw t2, 0(sp)        # a
+    lw t2, 0(s0)        # a
     sub t2, t2, t1
-    sw t2, 0(sp)
+    sw t2, 0(s0)
     NEXT
 
 # * ( n1 n2 -- n3 )     Low 32 bits of the product (Zmmul `mul`)
 defcode "*",1,,MUL
     checkunderflow CELL
     POP t1
-    lw t2, 0(sp)
+    lw t2, 0(s0)
     mul t2, t2, t1
-    sw t2, 0(sp)
+    sw t2, 0(s0)
     NEXT
 
 # 1+ ( n -- n+1 )
 defcode "1+",2,,ONEPLUS
     checkunderflow 0
-    lw t1, 0(sp)
+    lw t1, 0(s0)
     addi t1, t1, 1
-    sw t1, 0(sp)
+    sw t1, 0(s0)
     NEXT
 
 # 1- ( n -- n-1 )
 defcode "1-",2,,ONEMINUS
     checkunderflow 0
-    lw t1, 0(sp)
+    lw t1, 0(s0)
     addi t1, t1, -1
-    sw t1, 0(sp)
+    sw t1, 0(s0)
     NEXT
 
 # 2* ( x -- x*2 )
 defcode "2*",2,,TWOSTAR
     checkunderflow 0
-    lw t1, 0(sp)
+    lw t1, 0(s0)
     slli t1, t1, 1
-    sw t1, 0(sp)
+    sw t1, 0(s0)
     NEXT
 
 # 2/ ( n -- n/2 )       Arithmetic shift: the sign is preserved
 defcode "2/",2,,TWOSLASH
     checkunderflow 0
-    lw t1, 0(sp)
+    lw t1, 0(s0)
     srai t1, t1, 1
-    sw t1, 0(sp)
+    sw t1, 0(s0)
     NEXT
 
 # negate ( n -- -n )
 defcode "negate",6,,NEGATE
     checkunderflow 0
-    lw t1, 0(sp)
+    lw t1, 0(s0)
     neg t1, t1
-    sw t1, 0(sp)
+    sw t1, 0(s0)
     NEXT
 
 # abs ( n -- |n| )
 defcode "abs",3,,ABS
     checkunderflow 0
-    lw t1, 0(sp)
+    lw t1, 0(s0)
     srai t2, t1, 31             # all ones if negative
     xor t1, t1, t2
     sub t1, t1, t2
-    sw t1, 0(sp)
+    sw t1, 0(s0)
     NEXT
 
 # min ( a b -- a|b )    Signed
 defcode "min",3,,MIN
     checkunderflow CELL
     POP t1                      # b
-    lw t2, 0(sp)                # a
+    lw t2, 0(s0)                # a
     blt t2, t1, min_keep
     mv t2, t1
 min_keep:
-    sw t2, 0(sp)
+    sw t2, 0(s0)
     NEXT
 
 # max ( a b -- a|b )    Signed
 defcode "max",3,,MAX
     checkunderflow CELL
     POP t1                      # b
-    lw t2, 0(sp)                # a
+    lw t2, 0(s0)                # a
     blt t1, t2, max_keep
     mv t2, t1
 max_keep:
-    sw t2, 0(sp)
+    sw t2, 0(s0)
     NEXT
 
 # cells ( n -- n*4 )
 defcode "cells",5,,CELLS
     checkunderflow 0
-    lw t1, 0(sp)
+    lw t1, 0(s0)
     slli t1, t1, 2
-    sw t1, 0(sp)
+    sw t1, 0(s0)
     NEXT
 
 # cell+ ( a -- a+4 )
 defcode "cell+",5,,CELLPLUS
     checkunderflow 0
-    lw t1, 0(sp)
+    lw t1, 0(s0)
     addi t1, t1, CELL
-    sw t1, 0(sp)
+    sw t1, 0(s0)
     NEXT
 
 # um* ( u1 u2 -- lo hi )   Unsigned 32x32 -> 64 multiply, hi on top.
@@ -680,8 +681,8 @@ defcode "cell+",5,,CELLPLUS
 # middle sum and of the low add folded into the high word.
 defcode "um*",3,,UMSTAR
     checkunderflow CELL
-    lw a1, 0(sp)                # b
-    lw a2, CELL(sp)             # a
+    lw a1, 0(s0)                # b
+    lw a2, CELL(s0)             # a
     srli a3, a1, 16             # b1
     slli a1, a1, 16
     srli a1, a1, 16             # b0
@@ -702,8 +703,8 @@ defcode "um*",3,,UMSTAR
     add t1, t1, a3              # lo = p00 + (mid<<16)
     sltu a3, t1, a3             # carry out of the low add
     add a4, a4, a3              # hi += carry
-    sw t1, CELL(sp)             # lo (deeper)
-    sw a4, 0(sp)                # hi (top)
+    sw t1, CELL(s0)             # lo (deeper)
+    sw a4, 0(s0)                # hi (top)
     NEXT
 
 .balign CELL
@@ -739,9 +740,10 @@ udiv64_next:
 # zero and the remainder takes the sign of the dividend, like C).
 # arguments: a1 = dividend, a2 = divisor
 # returns: a1 = quotient, t1 = remainder
-# clobbers: t0, t2, a2, a3, a4, a5, gp, tp
+# clobbers: t0, t2, a2, a3, a4, a5, gp
 sdivmod:
-    mv tp, ra                   # udiv64 is called below
+    addi sp, sp, -CELL          # udiv64 is called below: ra goes on the
+    sw ra, 0(sp)                # machine stack
     mv gp, a1                   # the dividend's sign is the remainder's
     xor a5, a1, a2              # sign of the quotient
     srai t0, a1, 31
@@ -758,77 +760,79 @@ sdivmod_rem:
     bgez gp, sdivmod_done
     neg t1, t1
 sdivmod_done:
-    jr tp
+    lw ra, 0(sp)
+    addi sp, sp, CELL
+    ret
 
 # um/mod ( lo hi u -- rem quot )   Unsigned 64/32 division. Needs hi < u.
 # u = 0 gives quot = -1 instead of trapping.
 defcode "um/mod",6,,UMDIVMOD
     checkunderflow 2*CELL
-    lw a2, 0(sp)                # divisor
-    lw t1, CELL(sp)             # hi -> becomes the remainder
-    lw a1, 2*CELL(sp)           # lo -> becomes the quotient
+    lw a2, 0(s0)                # divisor
+    lw t1, CELL(s0)             # hi -> becomes the remainder
+    lw a1, 2*CELL(s0)           # lo -> becomes the quotient
     call udiv64
-    addi sp, sp, CELL           # 3 in, 2 out
-    sw t1, CELL(sp)             # remainder
-    sw a1, 0(sp)                # quotient on top
+    addi s0, s0, CELL           # 3 in, 2 out
+    sw t1, CELL(s0)             # remainder
+    sw a1, 0(s0)                # quotient on top
     NEXT
 
 # u/mod ( u1 u2 -- rem quot )   Unsigned 32/32 division
 defcode "u/mod",5,,UDIVMOD
     checkunderflow CELL
-    lw a2, 0(sp)                # divisor
-    lw a1, CELL(sp)             # dividend
+    lw a2, 0(s0)                # divisor
+    lw a1, CELL(s0)             # dividend
     li t1, 0
     call udiv64
-    sw t1, CELL(sp)             # remainder
-    sw a1, 0(sp)                # quotient on top
+    sw t1, CELL(s0)             # remainder
+    sw a1, 0(s0)                # quotient on top
     NEXT
 
 # /mod ( n1 n2 -- rem quot )   Signed division, truncating: -7 2 /mod gives
 # -1 -3. n2 = 0 does not trap.
 defcode "/mod",4,,DIVMOD
     checkunderflow CELL
-    lw a2, 0(sp)                # divisor
-    lw a1, CELL(sp)             # dividend
+    lw a2, 0(s0)                # divisor
+    lw a1, CELL(s0)             # dividend
     call sdivmod
-    sw t1, CELL(sp)             # remainder
-    sw a1, 0(sp)                # quotient on top
+    sw t1, CELL(s0)             # remainder
+    sw a1, 0(s0)                # quotient on top
     NEXT
 
 # / ( n1 n2 -- quot )
 defcode "/",1,,DIV
     checkunderflow CELL
     POP a2                      # divisor
-    lw a1, 0(sp)                # dividend
+    lw a1, 0(s0)                # dividend
     call sdivmod
-    sw a1, 0(sp)
+    sw a1, 0(s0)
     NEXT
 
 # mod ( n1 n2 -- rem )
 defcode "mod",3,,MOD
     checkunderflow CELL
     POP a2                      # divisor
-    lw a1, 0(sp)                # dividend
+    lw a1, 0(s0)                # dividend
     call sdivmod
-    sw t1, 0(sp)
+    sw t1, 0(s0)
     NEXT
 
 # lshift ( x u -- x<<u )  The core uses the low 5 bits of u: u >= 32 wraps.
 defcode "lshift",6,,LSHIFT
     checkunderflow CELL
     POP t1                      # u
-    lw t2, 0(sp)                # x
+    lw t2, 0(s0)                # x
     sll t2, t2, t1
-    sw t2, 0(sp)
+    sw t2, 0(s0)
     NEXT
 
 # rshift ( x u -- x>>u )  Logical shift. Same u >= 32 caveat as lshift.
 defcode "rshift",6,,RSHIFT
     checkunderflow CELL
     POP t1                      # u
-    lw t2, 0(sp)                # x
+    lw t2, 0(s0)                # x
     srl t2, t2, t1
-    sw t2, 0(sp)
+    sw t2, 0(s0)
     NEXT
 
 ##
@@ -839,35 +843,35 @@ defcode "rshift",6,,RSHIFT
 defcode "and",3,,AND
     checkunderflow CELL # need 2 items
     POP t1
-    lw t2, 0(sp)
+    lw t2, 0(s0)
     and t2, t2, t1
-    sw t2, 0(sp)
+    sw t2, 0(s0)
     NEXT
 
 # or ( a b -- a|b )
 defcode "or",2,,OR
     checkunderflow CELL # need 2 items
     POP t1
-    lw t2, 0(sp)
+    lw t2, 0(s0)
     or t2, t2, t1
-    sw t2, 0(sp)
+    sw t2, 0(s0)
     NEXT
 
 # xor ( a b -- a^b )
 defcode "xor",3,,XOR
     checkunderflow CELL # need 2 items
     POP t1
-    lw t2, 0(sp)
+    lw t2, 0(s0)
     xor t2, t2, t1
-    sw t2, 0(sp)
+    sw t2, 0(s0)
     NEXT
 
 # invert ( n -- ~n )    Bitwise complement (convenience; = -1 xor)
 defcode "invert",6,,INVERT
     checkunderflow 0    # need 1 item
-    lw t1, 0(sp)
+    lw t1, 0(s0)
     xori t1, t1, -1
-    sw t1, 0(sp)
+    sw t1, 0(s0)
     NEXT
 
 ##
@@ -877,89 +881,89 @@ defcode "invert",6,,INVERT
 # 0= ( x -- f )         -1 if top of stack is 0, 0 otherwise
 defcode "0=",2,,ZEQU
     checkunderflow 0    # check for stack underflow of data stack (1 CELL)
-    lw t0, 0(sp)        # load the DSP value (x) into temporary
+    lw t0, 0(s0)        # load the DSP value (x) into temporary
     snez t0, t0         # store 0 in temporary if it's equal to 0, otherwise store 1
     addi t0, t0, -1     # store -1 in temporary if it's 0, otherwise store 0
-    sw t0, 0(sp)        # store value back into the top of the stack
+    sw t0, 0(s0)        # store value back into the top of the stack
     NEXT
 
 # 0< ( n -- f )         True (-1) if n is negative, else 0 (eForth's only compare)
 defcode "0<",2,,ZLESS
     checkunderflow 0    # need 1 item
-    lw t1, 0(sp)
+    lw t1, 0(s0)
     srai t1, t1, 31     # arithmetic shift: sign bit fills the word
-    sw t1, 0(sp)
+    sw t1, 0(s0)
     NEXT
 
 # 0> ( n -- f )         True if n is positive
 defcode "0>",2,,ZGREATER
     checkunderflow 0
-    lw t1, 0(sp)
+    lw t1, 0(s0)
     sgtz t1, t1
     neg t1, t1
-    sw t1, 0(sp)
+    sw t1, 0(s0)
     NEXT
 
 # = ( a b -- f )
 defcode "=",1,,EQUAL
     checkunderflow CELL
     POP t1
-    lw t2, 0(sp)
+    lw t2, 0(s0)
     sub t2, t2, t1
     seqz t2, t2
     neg t2, t2
-    sw t2, 0(sp)
+    sw t2, 0(s0)
     NEXT
 
 # <> ( a b -- f )
 defcode "<>",2,,NOTEQUAL
     checkunderflow CELL
     POP t1
-    lw t2, 0(sp)
+    lw t2, 0(s0)
     sub t2, t2, t1
     snez t2, t2
     neg t2, t2
-    sw t2, 0(sp)
+    sw t2, 0(s0)
     NEXT
 
 # < ( a b -- f )       Signed
 defcode "<",1,,LESS
     checkunderflow CELL
     POP t1                      # b
-    lw t2, 0(sp)                # a
+    lw t2, 0(s0)                # a
     slt t2, t2, t1
     neg t2, t2
-    sw t2, 0(sp)
+    sw t2, 0(s0)
     NEXT
 
 # > ( a b -- f )       Signed
 defcode ">",1,,GREATER
     checkunderflow CELL
     POP t1
-    lw t2, 0(sp)
+    lw t2, 0(s0)
     slt t2, t1, t2
     neg t2, t2
-    sw t2, 0(sp)
+    sw t2, 0(s0)
     NEXT
 
 # u< ( u1 u2 -- f )
 defcode "u<",2,,ULESS
     checkunderflow CELL
     POP t1
-    lw t2, 0(sp)
+    lw t2, 0(s0)
     sltu t2, t2, t1
     neg t2, t2
-    sw t2, 0(sp)
+    sw t2, 0(s0)
     NEXT
 
 # u> ( u1 u2 -- f )
 defcode "u>",2,,UGREATER
     checkunderflow CELL
     POP t1
-    lw t2, 0(sp)
+    lw t2, 0(s0)
     sltu t2, t1, t2
     neg t2, t2
-    sw t2, 0(sp)
+    sw t2, 0(s0)
     NEXT
 
 ##
@@ -1073,10 +1077,10 @@ defcode "find-name-in",12,,FINDNAMEIN
 # count ( a -- a+1 u )  Split a counted string into its text and its length
 defcode "count",5,,COUNT
     checkunderflow 0
-    lw a1, 0(sp)
+    lw a1, 0(s0)
     lbu a2, 0(a1)               # the count byte
     addi a1, a1, 1
-    sw a1, 0(sp)
+    sw a1, 0(s0)
     PUSH a2
     NEXT
 
@@ -1097,7 +1101,7 @@ defcode "s=",2,,SEQUAL
     checkunderflow 2*CELL
     POP a3                      # u
     POP a2                      # a2
-    lw a1, 0(sp)                # a1
+    lw a1, 0(s0)                # a1
     li t1, -1                   # equal until a byte differs
 sequal_loop:
     beqz a3, sequal_done
@@ -1111,7 +1115,7 @@ sequal_loop:
 sequal_diff:
     li t1, 0
 sequal_done:
-    sw t1, 0(sp)
+    sw t1, 0(s0)
     NEXT
 
 # scan ( a u c -- a' u' )   Step forward to the first character c. a' points
@@ -1119,8 +1123,8 @@ sequal_done:
 defcode "scan",4,,SCAN
     checkunderflow 2*CELL
     POP a3                      # c
-    lw a2, 0(sp)                # u
-    lw a1, CELL(sp)             # a
+    lw a2, 0(s0)                # u
+    lw a1, CELL(s0)             # a
 scan_loop:
     beqz a2, scan_done
     lbu a4, 0(a1)
@@ -1129,20 +1133,20 @@ scan_loop:
     addi a2, a2, -1
     j scan_loop
 scan_done:
-    sw a1, CELL(sp)
-    sw a2, 0(sp)
+    sw a1, CELL(s0)
+    sw a2, 0(s0)
     NEXT
 
 # /string ( a u n -- a+n u-n )   Drop the first n characters of a string
 defcode "/string",7,,SLASHSTRING
     checkunderflow 2*CELL
     POP a3                      # n
-    lw a2, 0(sp)                # u
-    lw a1, CELL(sp)             # a
+    lw a2, 0(s0)                # u
+    lw a1, CELL(s0)             # a
     add a1, a1, a3
     sub a2, a2, a3
-    sw a1, CELL(sp)
-    sw a2, 0(sp)
+    sw a1, CELL(s0)
+    sw a2, 0(s0)
     NEXT
 
 ##
@@ -1181,8 +1185,8 @@ defcode ":",1,,COLON
     addi a5, a5, 2*CELL # ...+ link + count byte + alignment slack (4 + 1 + 3)
     andi a5, a5, -CELL  # a5 = code field address (CELL-aligned)
     addi gp, a5, CELL   # gp = new HERE (just after the code field)
-    li tp, DICT_TOP     # load out of bounds memory address (DICT_TOP)
-    bge gp, tp, err_mem # error if the memory address is out of bounds
+    li t0, DICT_TOP     # load out of bounds memory address (DICT_TOP)
+    bge gp, t0, err_mem # error if the memory address is out of bounds
 
     # link field: address of the previous word of the CURRENT vocabulary
     li t1, var_CURRENT
@@ -1382,9 +1386,9 @@ defcode "[']",3,F_IMMEDIATE,BTICK
 # and the alignment padding (jonesforth >CFA).
 defcode ">cfa",4,,TCFA
     checkunderflow 0    # need 1 item
-    lw a0, 0(sp)        # load the header address from the top of the stack
+    lw a0, 0(s0)        # load the header address from the top of the stack
     call to_cfa         # a0 = code field address (clobbers t0, ra)
-    sw a0, 0(sp)        # store it back on the stack
+    sw a0, 0(s0)        # store it back on the stack
     NEXT
 
 # latest ( -- addr )     Address of the cell that holds the newest word of the
@@ -1487,9 +1491,9 @@ defcode "voc-link",8,,VOCLINK
 # cell of the vocabulary edit, the value find-name-in takes.
 defcode ">body",5,,TBODY
     checkunderflow 0
-    lw t1, 0(sp)
+    lw t1, 0(s0)
     addi t1, t1, 2*CELL
-    sw t1, 0(sp)
+    sw t1, 0(s0)
     NEXT
 
 .balign CELL
@@ -1665,7 +1669,7 @@ defcode "abort",5,,ABORT
 # quit ( -- )           Empty the return stack, interpret state, fresh line;
 # the data stack is left alone (ANS quit).
 defcode "quit",4,,QUIT
-    li s0, RSP_TOP
+    li tp, RSP_TOP
     li t0, var_STATE
     sw zero, 0(t0)
     j tib_init

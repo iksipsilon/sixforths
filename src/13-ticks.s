@@ -37,9 +37,10 @@ ticks_init:
 
 .balign CELL
 # The tick: SysTick's compare interrupt, vector table entry 12, every 2 ms.
-# HPE has saved ra, t0-t2 and a0-a5 below sp, and mret restores them, so only
-# those may be used here; sp, s0, s1, gp and tp must not change, and nothing
-# may be stored below sp. The routine is in flash, so it waits while a flash
+# HPE has saved ra, t0-t2 and a0-a5 on the machine stack, and mret restores
+# them, so only those may be used here; s0, s1, gp and tp must not change
+# (to use one, save it on the machine stack first and restore it), and sp
+# must be back where it was at mret. The routine is in flash, so it waits while a flash
 # page is erased or programmed (the core stands still) and then runs late: if
 # the next compare would already be past (or too close to catch), it is put a
 # whole period after now. A compare in the past would not match again until
