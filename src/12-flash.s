@@ -1,11 +1,13 @@
 ##
-# Flash: the FPEC routines, the source region and the user flash page words
+# Flash: the FPEC routines, the source lines and the user flash page words
 # (CH32V006 PORT)
 #
-# The source region (LOG_BASE..LOG_TOP) holds plain text that is interpreted
-# at boot through the input-source switch in uart_get. Erased flash (0xFF)
-# ends it. Nothing writes the region at the moment: the appending log is
-# gone, and the line words (p list load) are not in yet. `wipe` erases it.
+# Source lines: LINES_BASE..LINES_TOP holds 160 slots of 64 bytes. A slot is
+# the text of one line (up to 63 characters), a newline, then unused bytes
+# that stay 0xFF; a slot that was never written is all 0xFF. `load` points
+# the input-source switch in uart_get at a range of lines, which are then
+# interpreted as if they were typed; 0xFF bytes are skipped. Line 0 is
+# loaded at boot.
 #
 # Flash physics: the V006 erases and programs whole 256-byte pages (FTER,
 # FTPG). All ops run from flash: the core stalls while the FPEC is busy,
@@ -98,6 +100,63 @@ fpage_erase_bsy1:
     ret
 
 ##
+# Source lines
+##
+
+.balign CELL
+# the slot of a line
+# arguments: a0 = line number
+# returns: a0 = address of its slot; jumps to the error handler unless the
+# number is 0 ... LINES-1
+# clobbers: t0
+line_addr:
+    li t0, LINES
+    bgeu a0, t0, err_error
+    slli a0, a0, 6              # * LINE_SIZE
+    li t0, LINES_BASE
+    add a0, a0, t0
+    ret
+
+# line ( n -- addr )    Address of the 64-byte slot of line n (0 ... 159)
+defcode "line",4,,LINE
+    checkunderflow 0
+    lw a0, 0(s0)
+    call line_addr              # (clobbers t0)
+    sw a0, 0(s0)
+    NEXT
+
+# load ( a b -- )       Interpret lines a to b as if they were typed. They are
+# read when the current input line is finished, so anything after `load` on
+# its line runs first: put it last. A `load` in a loaded line replaces the
+# range (it does not come back). An error abandons the rest.
+defcode "load",4,,LOAD
+    checkunderflow CELL
+    POP a0                      # b
+    POP a1                      # a
+    bltu a0, a1, err_error      # nothing to load backwards
+    call line_addr              # (clobbers t0)
+    addi a2, a0, LINE_SIZE      # a2 = the end of line b
+    mv a0, a1
+    call line_addr
+    li t0, var_SRC
+    sw a0, 0(t0)
+    sw a2, var_SRCEND-var_SRC(t0)
+    NEXT
+
+# wipe ( -- )           Erase all the lines
+defcode "wipe",4,,WIPE
+    li a3, LINES_BASE     # a3 (Z) survives the calls below
+wipe_loop:
+    li t0, LINES_TOP
+    bgeu a3, t0, wipe_done
+    mv a0, a3
+    call fpage_erase    # erase one 256-byte page (clobbers t0, t1, ra)
+    addi a3, a3, FLASH_PAGE
+    j wipe_loop
+wipe_done:
+    NEXT
+
+##
 # Flash page words for the application's data (above the log)
 ##
 
@@ -147,17 +206,4 @@ fpageprog_blank:
     addi a3, a3, CELL
     bne a3, a4, fpageprog_blank
     call fpage_prog             # a0 = page, a2 = source (clobbers t0-t2, a2-a4)
-    NEXT
-
-# wipe ( -- )           Erase the whole source region
-defcode "wipe",4,,WIPE
-    li a3, LOG_BASE     # a3 (Z) survives the calls below
-wipe_loop:
-    li t0, LOG_TOP
-    bgeu a3, t0, wipe_done
-    mv a0, a3
-    call fpage_erase    # erase one 256-byte page (clobbers t0, t1, ra)
-    addi a3, a3, FLASH_PAGE
-    j wipe_loop
-wipe_done:
     NEXT

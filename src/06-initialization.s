@@ -19,17 +19,18 @@ boot:
     call ticks_init     # CH32V006 PORT: start SysTick for ticks and ms (13-ticks.s)
     call gpio_init      # board specific GPIO initialization (a0 = skip button)
 
-    # arm the boot replay unless the skip button (PD4 high) is held:
-    # LOGSRC = -1 means "armed"; the first pass through reset: turns it into
-    # LOG_BASE and the replay begins. Holding PD4 boots to a bare ok prompt,
-    # the escape hatch for a log whose last line starts a broken main loop.
-    # (CH32V006 PORT: gpio_init samples PD4 with PD5 driven low)
-    li t2, -1
-    beqz a0, boot_arm
-    mv t2, zero         # button held: no replay this boot
-boot_arm:
-    li t0, LOGSRC
-    sw t2, 0(t0)
+    # CH32V006 PORT: line 0 is interpreted first, unless the skip button
+    # (PD4 high) is held. Holding PD4 boots to a bare ok prompt, the escape
+    # hatch for a line 0 that starts a broken main loop.
+    # (gpio_init samples PD4 with PD5 driven low)
+    li t0, var_SRC
+    sw zero, 0(t0)      # input from the UART
+    bnez a0, boot_noload
+    li t1, LINES_BASE
+    sw t1, 0(t0)        # button released: input from line 0...
+    addi t1, t1, LINE_SIZE
+    sw t1, var_SRCEND-var_SRC(t0) # ...and from that line only
+boot_noload:
 
     call modem_init     # CH32V006 PORT: USART2 + DMA ring for mkey and memit (14-modem.s)
 
@@ -63,26 +64,15 @@ boot_arm:
 
     # display boot message
     print_message boot
-    j reset
+    j reset_boot        # not through reset: it would abandon line 0
 
 # reset the Forth stack pointers, registers, variables, and state
 reset:
-    # CH32V006 PORT: replay arming. Boot arms LOGSRC with -1; this first
-    # pass through reset starts the replay from LOG_BASE. Every later pass
-    # through reset is an error path: abandon the replay (a bad log line can
-    # never wedge the boot; the rest of the log is skipped and input falls
-    # back to the UART).
-    li t0, LOGSRC
-    lw t1, 0(t0)
-    li t2, -1
-    bne t1, t2, reset_noreplay
-    li t1, LOG_BASE
-    sw t1, 0(t0)        # armed: begin the replay
-    j reset_replay_done
-reset_noreplay:
-    sw zero, 0(t0)      # error or normal operation: input from the UART
-reset_replay_done:
-
+    # CH32V006 PORT: an error abandons the lines being loaded (a bad line can
+    # never wedge the boot): input falls back to the UART.
+    li t0, var_SRC
+    sw zero, 0(t0)
+reset_boot:
     # initialize stack pointers
     # CH32V006 PORT: the machine stack is emptied too: an error may have left
     # a subroutine's return address on it. sp gets its value in one

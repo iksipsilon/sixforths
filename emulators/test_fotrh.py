@@ -41,7 +41,7 @@ for name, size in (("FRAME", "FRAME_SIZE"), ("MLINE", "MLINE_SIZE"), ("MRING", "
     a += S[size]
 # the variables: every cell from the top of the machine stack up to the TIB, each used once.
 # A variable added without moving MSP_TOP would lie inside the machine stack and fail here.
-cells = sorted(v for k, v in S.items() if k.startswith("var_") or k == "LOGSRC")
+cells = sorted(v for k, v in S.items() if k.startswith("var_") or False)
 check("RAM map: dictionary, buffers, machine stack, variables, TIB and stacks fill the RAM exactly", B0,
       f"gaps={gaps} stack_top={a == S['MSP_TOP']} cells={cells == list(range(S['MSP_TOP'], S['TIB_BOTTOM'], 4))} "
       f"dict={S['FORTH_SIZE'] == S['DICT_TOP'] - S['RAM_BASE']} "
@@ -232,11 +232,18 @@ t("... its name is gone", FV + "v2", "  ?", absent=())
 t("forget keeps older vocabularies", "vocabulary v1 v1 definitions : p1 11 ; forth definitions vocabulary v2\nforget v2\nv1 p1 . forth voc-link @ ' v1 >body 4 + = .", "11 -1 ")
 t("... but not what was added to them later", "vocabulary v1 vocabulary v2 v1 definitions : p1 11 ; forth definitions\nforget v2\nv1 p1", "  ?", absent=())
 t("forget refuses a word of an unselected vocabulary", VOC + "vocabulary e3 e3 definitions : only 1 ; forth definitions\nforget only", "  ?", absent=())
-# vocabularies come back from the source region
+# vocabularies come back from the lines in flash
 FLASH = open(h.BIN, "rb").read()
-r = h.boot(flash=bytes(FLASH) + bytes([0xFF] * (0x4000 - len(FLASH))) + VOC.encode())
+LINES0, LINESN = 0x4000, 0x2800                  # the lines (flash offsets)
+def image(lines):
+    """The kernel plus the lines {number: text}, as a whole flash image."""
+    reg = bytearray([0xFF] * LINESN)
+    for n, text in lines.items():
+        reg[64 * n:64 * n + len(text) + 1] = text.encode() + b"\n"
+    return bytes(FLASH) + bytes([0xFF] * (LINES0 - len(FLASH))) + bytes(reg)
+r = h.boot(flash=image(dict(enumerate(["1 3 load"] + VOC.strip().split("\n")))))
 out, _ = h.feed(r, "k3 edit k3 forth k3\n")
-check("vocabularies come back with the log", r, out, ["forth k3\nGFG"])
+check("vocabularies come back with the lines", r, out, ["forth k3\nGFG"])
 
 # ---- numbers and debugging ----
 t("print limits", "2147483647 . -2147483648 . 0 .", "2147483647 -2147483648 0 ")
@@ -291,42 +298,77 @@ out = bytes(e.uart_out[start:]).decode("latin1")
 out += " [hang]" if e.pc == h.SYM["beacon_hang"] else " [no hang]"
 check("exception via vector 3 prints the beacon", e, out, ["T00000004 00001234 ", "[hang]"])
 
-# ---- source-replay log: fast 256-byte page programming ----
-LOG0, LOGN = 0x4000, 0x2800                      # log region (flash offsets)
-img = bytearray(FLASH) + bytearray([0xFF] * (LOG0 - len(FLASH)))
-src = b"".join(b": w%d %d ; \n" % (k, k) for k in range(180))
-r = h.boot(flash=bytes(img + src))
-out, _ = h.feed(r, "w0 w179 + .\n")
-check(f"log: 180 definitions ({len(src)} bytes, many pages) replayed", r, out, ["179 "])
-h.feed(r, "wipe\n")
-erased = bytes(r.f[LOG0:LOG0 + LOGN]) == b"\xff" * LOGN
-check("log: wipe erases the region", r, "[erased]" if erased else "[NOT erased]", ["[erased]"])
-r = h.boot(flash=bytes(r.f))
-out, _ = h.feed(r, "w0 .\n")
-check("log: nothing is replayed after wipe", r, out, ["  ?"])
-# the end of the replay: no extra empty line and "ok" after a whole last line,
-# none for an empty log, but a partial last line (power cut) is still closed
-img = bytearray(FLASH) + bytearray([0xFF] * (LOG0 - len(FLASH)))
-for log, expect, absent in ((b": sq dup * ; \n", ": sq dup * ; \n   ok\n", "ok\n\n"),
-                            (b"", "sixforths v0.0\n\n", "ok"),
-                            (b": sq dup * ;", ": sq dup * ;\n   ok\n", "")):
-    e = h.Emu(bytes(img + log), b"")
-    h.run_idle(e, 100_000)
-    boot = bytes(e.uart_out).decode("latin1")
-    out, _ = h.feed(e, "3 sq 48 + emit\n")
-    want = [expect] + (["emit\n9"] if log else [])
-    check(f"log: replay end, log {log!r}", e, boot + out, want,
-          absent=(absent,) if absent else ())
-# WeAct board: closed SB3/SB4 join PD4 to PD5; the replay must still run
-img = bytearray(FLASH) + bytearray([0xFF] * (LOG0 - len(FLASH))) + b": sq dup * ; \n"
-e = h.Emu(bytes(img), b"")
-e.weact_bridge = True
-h.run_idle(e, 100_000)
+# ---- source lines: load, and line 0 at boot ----
+LOG0 = LINES0
+def booted(lines, pd4=0, bridge=False):
+    e = h.Emu(image(lines), b"")
+    e.gpiod_in, e.weact_bridge = pd4, bridge
+    h.run_idle(e, 400_000_000)
+    return e, bytes(e.uart_out).decode("latin1")
+e, boot = booted({0: ": sq dup * ;"})
 out, _ = h.feed(e, "3 sq 48 + emit\n")
-check("log: replay runs with PD4 tied to PD5 (WeAct SB3/SB4)", e, out, ["emit\n9"])
+check("lines: line 0 is loaded at boot, echoed as typed", e, boot + out, ["sixforths v0.0\n\n: sq dup * ;\n   ok\n", "emit\n9"], absent=("ok\n\n", "ok\n   ok"))
+e, boot = booted({})
+check("lines: an empty line 0 loads nothing", e, boot + "|", ["sixforths v0.0\n\n|"])
+e, boot = booted({1: ": sq dup * ;"})
+out, _ = h.feed(e, "3 sq\n")
+check("lines: only line 0 is loaded at boot", e, boot + out, ["  ?"], absent=(": sq",))
+e, boot = booted({0: ": sq dup * ;"}, pd4=0x10)
+out, _ = h.feed(e, "3 sq\n")
+check("lines: PD4 held, nothing is loaded", e, boot + out, ["  ?"], absent=(": sq",))
+e, boot = booted({0: "nosuchword", 1: ": sq dup * ;"})
+out, _ = h.feed(e, "65 emit\n")
+check("lines: a bad line 0 prints ? and the console works", e, boot + out, ["nosuchword\n  ?\n", "emit\nA"])
+e, boot = booted({0: "4 6 load", 4: ": tw", 6: "2 * ;", 7: ": no 1 ;"})
+out, _ = h.feed(e, "5 tw . no\n")
+check("lines: line 0 loads a range; a definition over lines, an erased line between", e, boot + out,
+      ["4 6 load\n   ok\n: tw\n   ok\n2 * ;\n   ok\n", "10   ?"])
+assert len(": xx " + "1 drop " * 8 + " ;") == 63
+e, boot = booted({})
+e.f[LINES0:LINES0 + LINESN] = image({20: ": sq dup * ;", 21: ": cube dup sq * ;", 22: "nosuchword", 23: ": late 1 ;",
+                                     30: ": xx " + "1 drop " * 8 + " ;", 31: "65 emit", 40: "66 emit 20 20 load 67 emit", 159: ": top 9 ;"})[LINES0:]
+t0e = copy.deepcopy(e)
+def lt(name, src, *expect, absent=()):
+    x = copy.deepcopy(t0e)
+    out, _ = h.feed(x, src + "\n")
+    check("lines: " + name, x, out, list(expect), absent=absent)
+lt("load", "20 21 load\n3 cube .", ": cube dup sq * ;\n   ok\n", "27 ")
+lt("what follows load on its line runs first", "20 20 load 65 emit", "emit\nA   ok\n: sq dup * ;\n   ok\n")
+lt("an error abandons the rest", "20 23 load\n3 cube . late", "nosuchword\n  ?\n", "27   ?", absent=(": late",))
+lt("a full 63-character line does not merge with the next", "30 31 load", " ;\n   ok\n65 emit\nA   ok\n")
+lt("a load in a loaded line replaces the range", "40 41 load\n2 sq .", "BC   ok\n: sq dup * ;\n   ok\n", "4 ")
+lt("load the last line", "159 159 load\ntop .", "9 ")
+lt("load of erased lines", "100 158 load\n65 emit", "load\n   ok\n65 emit\nA")
+lt("load backwards", "21 20 load 65 emit", "  ?", absent=("A",))
+lt("load beyond the last line", "159 160 load 65 emit", "  ?", absent=("A",))
+lt("load from a negative line", "-1 3 load 65 emit", "  ?", absent=("A",))
+lt("load needs two numbers", "3 load", "underflow")
+lt("line", "0 line u. 1 line 0 line - . 159 line hex u.", "134234112 64 80067C0 ")
+lt("line beyond the last", "160 line", "  ?")
+lt("line -1", "-1 line", "  ?")
+lt("line reads the text", "20 line c@ emit 20 line 12 + c@ .", ":10 ")
+e = copy.deepcopy(t0e)
+e.f[LINES0 + 5 * 256:LINES0 + 6 * 256] = b"\xff" * 256      # a power cut left the page of lines 20-23 erased
+out, _ = h.feed(e, "20 31 load\n")
+check("lines: an erased page is skipped", e, out, ["65 emit\nA"])
+src = {0: "1 159 load"}
+src.update({k: f": w{k} {k} ;" for k in range(1, 160)})
+e, boot = booted(src)
+out, _ = h.feed(e, "w1 w159 + .\n")
+check("lines: all 160 lines loaded at boot", e, out, ["160 "])
+h.feed(e, "wipe\n")
+erased = bytes(e.f[LINES0:LINES0 + LINESN]) == b"\xff" * LINESN
+check("lines: wipe erases them all", e, "[erased]" if erased else "[NOT erased]", ["[erased]"])
+r = h.boot(flash=bytes(e.f))
+out, _ = h.feed(r, "w1 .\n")
+check("lines: nothing is loaded after wipe", r, out, ["  ?"])
+# WeAct board: closed SB3/SB4 join PD4 to PD5; line 0 must still load
+e, boot = booted({0: ": sq dup * ;"}, bridge=True)
+out, _ = h.feed(e, "3 sq 48 + emit\n")
+check("lines: line 0 loads with PD4 tied to PD5 (WeAct SB3/SB4)", e, out, ["emit\n9"])
 h.feed(e, "reboot\n")                            # software reboot: PD5 is TX right now
 out, _ = h.feed(e, "3 sq 48 + emit\n")
-check("log: ... and after a software reboot", e, out, ["emit\n9"])
+check("lines: ... and after a software reboot", e, out, ["emit\n9"])
 # emulator guards: the FPEC model must reject what the V006 cannot do
 e = copy.deepcopy(B0)                            # boot unlocked the FPEC
 e.f[LOG0] = 0x00                                 # page 0x4000 is not erased
@@ -356,8 +398,8 @@ out, _ = h.feed(e, "pad 0x0800E800 fpage-prog 66 emit\n")
 check("fpage-prog refuses a page that is not erased", e, out, ["  ?"], absent=("B",))
 out, _ = h.feed(e, "0x0800E8AA fpage-erase 0x0800E800 c@ .\n")
 check("fpage-erase (any address in the page)", e, out + f" {bytes(e.f[UF:UF+256]) == bytes([255]) * 256}", ["255 ", "True"])
-for name, src in (("the kernel", "0x08000000 fpage-erase"), ("the log", "0x08004000 fpage-erase"),
-                  ("the last log page", "0x080067FF fpage-erase"), ("beyond the flash", "0x0800F800 fpage-erase"),
+for name, src in (("the kernel", "0x08000000 fpage-erase"), ("the lines", "0x08004000 fpage-erase"),
+                  ("the last page of the lines", "0x080067FF fpage-erase"), ("beyond the flash", "0x0800F800 fpage-erase"),
                   ("an alias address", "0x0000E800 fpage-erase"), ("prog into the kernel", "pad 0x08000100 fpage-prog"),
                   ("an unaligned source", "pad 1+ 0x0800E800 fpage-prog")):
     e, out, _ = h.session(P, src + " 66 emit\n")
@@ -491,7 +533,7 @@ e, out, _ = h.session(P, "words\n")
 names = out.split("\n")[1].split()                # line 0 is the echoed input
 print("word count:", len(names))
 check("words lists new primitives", e, out, ["um/mod", "xdoes", "find-name", "parse", "um*", "quit"])
-check("words lists the modem words, then ms and ticks", e, out, ["\n <modem >modem mtimeout memit mkey mkey? ms ticks irqs wipe "])
+check("words lists the modem words, then ms and ticks", e, out, ["\n <modem >modem mtimeout memit mkey mkey? ms ticks irqs fpage-prog fpage-erase wipe load line "])
 
 print("\nALL PASS" if failures == 0 else f"\n{failures} FAILURES")
 sys.exit(1 if failures else 0)

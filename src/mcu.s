@@ -75,7 +75,7 @@
 .equ GPIOD_BASE, 0x40011400
 .equ GPIOD_INDR, 0x08           # input data register offset
 .equ GPIOD_BCR, 0x14            # bit clear register offset (write 1 = output 0)
-.equ LOG_SKIP_BIT, (1 << 4)     # PD4
+.equ SKIP_BIT, (1 << 4)     # PD4
 
 ##
 # SysTick (STK) - CH32V006 PORT, for ticks and ms (13-ticks.s)
@@ -201,7 +201,7 @@ uart_done:
 # Initialize the GPIO
 # (CH32V006 PORT: USART1 default mapping is TX = PD5, RX = PD6, i.e. port D
 # CFGLR nibbles 5 and 6, instead of the GD32V's PA9/PA10 in CTL1)
-# returns: a0 = replay-skip button (0 = released, LOG_SKIP_BIT = held)
+# returns: a0 = replay-skip button (0 = released, SKIP_BIT = held)
 # clobbers: t0, t1, t2, a1, a2
 gpio_init:
     li t0, 0x40011400                       # load base address of GPIOD
@@ -250,7 +250,7 @@ gpio_settle:
     nop
     lw a0, GPIOD_INDR(t0)                   # read the port D inputs
     sw a2, 0x00(t0)                         # PD5 is the UART TX again (idle high)
-    andi a0, a0, LOG_SKIP_BIT               # keep the button (PD4)
+    andi a0, a0, SKIP_BIT               # keep the button (PD4)
 
 gpio_done:
     ret

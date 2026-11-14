@@ -24,11 +24,12 @@
 .equ var_TOIN, var_STATE - CELL         # 1 CELL for TOIN variable (looks into TIB)
 .equ var_HERE, var_TOIN - CELL          # 1 CELL for HERE variable
 .equ var_LATEST, var_HERE - CELL        # 1 CELL for LATEST variable
-# CH32V006 PORT: the input source (see uart_get in 04-io-helpers.s)
-.equ LOGSRC, var_LATEST - CELL          # 1 CELL: replay pointer (0 = UART, -1 = armed)
+# CH32V006 PORT: the input source (uart_get in 04-io-helpers.s; see load)
+.equ var_SRC, var_LATEST - CELL         # 1 CELL: next character of the loaded lines (0 = input from the UART)
+.equ var_SRCEND, var_SRC - CELL         # 1 CELL: where the loaded lines end
 # CH32V006 PORT: variables of the number output words. They are RAM cells here
 # because the words that use them (10-forth-words.s) live in flash.
-.equ var_BASE, LOGSRC - CELL            # 1 CELL: number base for . u. # (see base)
+.equ var_BASE, var_SRCEND - CELL           # 1 CELL: number base for . u. # (see base)
 .equ var_HLD, var_BASE - CELL           # 1 CELL: <# ... #> build pointer (see hld)
 # CH32V006 PORT: vocabularies. A vocabulary is known by the address of its head
 # cell, the cell that holds the header of its newest word. FORTH's head cell is
@@ -103,20 +104,20 @@
 ##
 
 # The kernel occupies the bottom 16 KiB (enforced by linker.ld LENGTH).
-# Above it, a 10 KiB source-replay log: successfully interpreted lines are
-# appended as plain text and re-interpreted at boot. Erased flash (0xFF) is
-# the natural end-of-log marker; the log never contains a 0xFF byte.
+# Above it, 10 KiB of source lines: 160 slots of 64 bytes (12-flash.s). Line 0
+# is interpreted at boot.
 # The regions use the 0x08000000 flash base: the FPEC takes such addresses
 # for program/erase, and the same addresses read back via the flash alias.
-# The space above LOG_TOP is reserved for the phonebook and SMS slot stores.
 .equ FLASH_ALIAS, 0x08000000
-.equ LOG_BASE, FLASH_ALIAS + 0x4000     # bottom of the source-replay log
-.equ LOG_TOP, FLASH_ALIAS + 0x6800      # top of the log (10 KiB region)
-# Above the log: flash for the application's own data (call log, settings),
+.equ LINE_SIZE, 64                      # one slot: text, a newline, then 0xFF
+.equ LINES, 160                         # how many lines there are
+.equ LINES_BASE, FLASH_ALIAS + 0x4000   # line 0
+.equ LINES_TOP, LINES_BASE + LINES * LINE_SIZE  # 0x08006800
+# Above the lines: flash for the application's own data (call log, settings),
 # written a 256-byte page at a time with fpage-erase / fpage-prog. Those two
 # words refuse any address outside USER_FLASH..FLASH_TOP, so they cannot
-# damage the kernel or the source log.
-.equ USER_FLASH, LOG_TOP                # first page of the user flash
+# damage the kernel or the source lines.
+.equ USER_FLASH, LINES_TOP              # first page of the user flash
 .equ FLASH_TOP, FLASH_ALIAS + 0xF800    # end of the 62 KiB code flash
 
 ##
