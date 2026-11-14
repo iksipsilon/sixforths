@@ -51,8 +51,7 @@ Copyright (c) 2021~ Alexander Williams, https://a1w.ca
 .global _start
 _start:
 .option push
-.option norvc                       # entry 0 must be a 4-byte jump,
-.option norelax                     # and the linker must not shorten it
+.option norvc                       # entry 0 must be a 4-byte jump, not a 2-byte c.j
     j boot                          # 0x00: reset
     .word 0                         # 0x04: vector 1, reserved
     .word interrupt_handler         # 0x08: vector 2, NMI
