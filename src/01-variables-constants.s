@@ -15,8 +15,10 @@
 .equ TIB_BOTTOM, TIB_TOP - STACK_SIZE   # address of bottom of terminal buffer
 
 # CH32V006 PORT: room kept free under the data stack for one interrupt frame.
-# With the hardware prologue (HPE) on, the QingKe V2 saves ra, t0-t2 and
-# a0-a5 at sp when an interrupt is taken: 48 bytes (processor manual 3.4).
+# With the hardware prologue/epilogue (HPE) on, the QingKe V2 saves ra, t0-t2
+# and a0-a5 (10 registers, 40 bytes) at sp-4 ... sp-40 when an interrupt is
+# taken, and moves sp down 48 bytes (processor manual 3.4, Table 3-3; the
+# manual does not say what the last 8 bytes are for).
 # The data stack therefore holds (STACK_SIZE - IRQ_FRAME) / CELL = 52 cells.
 # One frame only: interrupts must not nest.
 .equ IRQ_FRAME, 48
