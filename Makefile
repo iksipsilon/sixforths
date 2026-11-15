@@ -12,11 +12,8 @@ READELF := $(CROSS)readelf
 
 # MCU specific variables (the chip's constants are in src/mcu.s, its
 # memory regions in linker.ld)
-# CH32V006 PORT: the QingKe V2C is RV32EC with the Zmmul (multiply-only)
-# extension. rv32ec_zicsr_zmmul needs binutils >= 2.39; on older binutils
-# use ARCH=rv32ec_zicsr and swap the single `mul` instruction in
-# src/05-internal-functions.s (in `number`) for the commented shift-add
-# fallback.
+# The QingKe V2C is RV32EC with the Zmmul (multiply-only) extension.
+# rv32ec_zicsr_zmmul needs binutils >= 2.39.
 ARCH ?= rv32ec_zicsr_zmmul
 EMU ?= elf32lriscv
 
@@ -27,8 +24,8 @@ TERMINAL ?= /dev/ttyACM0
 
 build: $(PROGNAME).o $(PROGNAME).elf $(PROGNAME).bin $(PROGNAME).hex $(PROGNAME).dump
 
-# CH32V006 PORT: the pattern rule below only tracks fiveforths.s, but the
-# real sources are .include'd -- declare them so edits trigger a rebuild
+# The pattern rule below only tracks sixforths.s, but the real sources are
+# .include'd -- declare them so edits trigger a rebuild
 $(PROGNAME).o: $(wildcard src/*.s)
 $(PROGNAME).elf: linker.ld
 
@@ -50,20 +47,20 @@ $(PROGNAME).elf: linker.ld
 readelf: $(PROGNAME).elf
 		$(READELF) -a $<
 
-# CH32V006 PORT: flash over SDI with a WCH-LinkE using minichlink
+# Flash over SDI with a WCH-LinkE using minichlink
 # (https://github.com/cnlohr/ch32fun); -b reboots the chip after writing
 flash-ch32v006:
 		minichlink -w $(FIRMWARE) flash -b
 
-# CH32V006 PORT: serial console via picocom.
+# Serial console via picocom.
 # Default device is the WCH-LinkE's own CDC-ACM serial passthrough
 # (/dev/ttyACM0); override with TERMINAL=/dev/ttyUSB0 for a CH340.
-# --imap lfcrlf: FiveForths transmits bare LF; map to CR+LF for display
-# --omap crlf:   picocom sends CR on Enter; FiveForths ignores CR and
+# --imap lfcrlf: the board transmits bare LF; map to CR+LF for display
+# --omap crlf:   picocom sends CR on Enter; the board ignores CR and
 #                terminates lines on LF, so map CR -> LF
 # --send-cmd:    Ctrl-A Ctrl-S sends a file (e.g. prelude.f) one line at a
 #                time with a 100 ms pause: the board does not read the UART
-#                while it processes a line (the slowest prelude line ~2 ms)
+#                while it processes a line
 
 term:
 		picocom -b 115200 --imap lfcrlf --omap crlf --send-cmd "ascii-xfr -sv -l 100" $(TERMINAL)
