@@ -296,6 +296,10 @@ What minichlink does, as seen on the board:
   not.
 - `minichlink -r` halts the core and does not resume it. Always follow it with
   `minichlink -b` (or `minichlink -e`).
+- After `minichlink -r` and `minichlink -b` the first line sent once came back with `?`:
+  the PC had received a stray byte (`ò`) before it, and the line was not understood, as
+  if that byte sat in the TIB. A second time it did not happen. A test script sends an
+  empty line first.
 - **Only the first connection after a power-up reliably leaves the chip running.** Later
   connections usually print `link error, nothing connected to linker` five times
   ("Trying to put processor in hold and retrying"), then work, and the chip has been
@@ -419,13 +423,24 @@ RX to PD5 (the console's TX), the LinkE's TX to PD6 (the console's RX).
 
 ## The board now
 
-- It runs commit `e4e4587` (13,544 bytes), the kernel in the repo.
+- It runs commit `3a4d650` (13,544 bytes), the kernel in the repo.
 - Its source lines and its user flash are empty (all 0xFF, read back). A wire joins D2
   and D3 (the USART2 loopback; D2 is driven as an output at every boot) and the board's
   USB-C socket is unplugged. Nothing else is connected.
 - Before trusting any of this after a pause: `make`, run the tests, and read the board's
   flash back to see what it really holds.
-- Checked on the board, all on `e4e4587`:
+- Checked on the board on `3a4d650`, which differs from `e4e4587` in the two things
+  tested here:
+  - Comments: what stands before a `\` comment runs when its line ends, a line that is
+    only a comment gets its `ok`, an unclosed `(` ends with its line, a definition over
+    two lines with both kinds; `n p \ comment` empties line n and the next line is not
+    stored.
+  - `key`: at the console it waits for a character; in a loaded line it waits for the
+    console too and the line after it stays whole (`key emit` in line 50, `65 emit` in
+    line 51). `key?` with nothing waiting gives 0.
+  - Besides: DEL, an error, the tick (50 in 100 ms), `wipe`, `reboot`; the read-back
+    showed the kernel equal to `sixforths.bin`, the lines and the user flash empty.
+- Checked on the board on `e4e4587`:
   - Boot, and the first line after a power-up (3 of 3 power-ups left the TIB empty).
   - Errors: one with 3 cells on the stack and one inside a definition (both leave
     `depth` 0, and the half-made word is gone); `3 allot nosuchword`,
