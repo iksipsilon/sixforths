@@ -183,6 +183,9 @@ t("+loop overshoot", ": ov 3 0 do i . 2 +loop ; ov", "0 2 ")
 t("um/mod by zero does not trap", "5 0 0 um/mod u. u.", "4294967295 5 ")
 t("forget refuses flash words", "forget dup 65 emit", "  ?", absent=("A",))
 t("parse-name", ": pn parse-name type ; pn hello", "hello")
+# a token ended by a 0 instead of a space: AB is put far up in the TIB, where only zeros follow it
+e, out, _ = h.session(P, ": pz 65 tib 100 + c! 66 tib 101 + c! 100 >in ! parse-name type >in @ . ;\npz\n")
+check("parse-name: a token followed by a 0", e, out, ["pz\nAB102 "], absent=("?",))
 t("number ok", ': nn s" 123" number . . ; nn', "0 123 ")
 t("number bad", ': nb s" 12x" number nip 0= . ; nb', "0 ")
 

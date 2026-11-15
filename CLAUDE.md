@@ -115,7 +115,7 @@ no session needs to read.
 
 - Flash 0x00000000: kernel + `.rodata`, **must stay under 16 KiB** (`FLASH` `LENGTH` in
   `linker.ld` at the repo root; confirm it says 16k).
-  Currently 13,556 bytes (184 words). Report the size after every change.
+  Currently 13,552 bytes (184 words). Report the size after every change.
 - Flash 0x08004000-0x08006800 (`LINES_BASE`..`LINES_TOP`, 10 KiB): 160 source lines of
   64 bytes (see "Source lines in flash").
 - Flash 0x08006800-0x0800F800 (`USER_FLASH`..`FLASH_TOP`, 36 KiB): the application's own
@@ -385,11 +385,11 @@ Planned for the LED rows (step 5b): PC0, PC2, PA1, PA2.
 
 ## The board now
 
-- It runs commit `9f1401a` (13,580 bytes). **The repo is ahead of it**: 13,556 bytes,
-  with five kernel changes that have only run in the emulator (`reset` no longer clears
+- It runs commit `9f1401a` (13,580 bytes). **The repo is ahead of it**: 13,552 bytes,
+  with six kernel changes that have only run in the emulator (`reset` no longer clears
   a0-a3 or loads s1; no jump in front of `execute`; a line cannot fill the TIB's last
-  byte; backspace clears the erased character in the TIB). Flashing needs the owner's
-  go-ahead (rule 3).
+  byte; backspace clears the erased character in the TIB; `token` finds the start of a
+  token that a 0 ends). Flashing needs the owner's go-ahead (rule 3).
 - Its source lines and its user flash are empty. A wire joins D2 and D3 (the USART2
   loopback; D2 is driven as an output at every boot) and the board's USB-C socket is
   unplugged. Nothing else is connected.
@@ -405,7 +405,7 @@ Planned for the LED rows (step 5b): PC0, PC2, PA1, PA2.
   `?`, line 0 after `reboot` and after a hardware reset, a bad line 0 gives `?` and then
   the prompt, `wipe`); `reboot`.
 - Not checked on the board yet: holding PD4 at reset so that line 0 does not load (it
-  needs a hand on the button); `fpage-prog`; the A7670E itself; the five kernel changes
+  needs a hand on the button); `fpage-prog`; the A7670E itself; the six kernel changes
   since `9f1401a`.
 
 ## Open work

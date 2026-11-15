@@ -31,18 +31,15 @@ token:
 token_char:
     lbu t0, 0(a0)               # read char from buffer
     addi a0, a0, 1              # move buffer pointer up
-    beqz t0, token_zero         # compare char with 0
+    beqz t0, token_end          # a 0 ends the line, and the token if one was read
     bgeu t1, t0, token_space    # compare char with space
     addi t2, t2, 1              # increment the token size for each non-space byte read
     j token_char                # loop to read the next character
 token_space:
     beqz t2, token_char         # loop to read next character if token size is 0
-    addi a0, a0, -1             # move buffer pointer down to ignore the space character
-    sub a0, a0, t2              # store the start address in W
-    j token_done
-token_zero:
-    addi a0, a0, -1             # move buffer pointer down to ignore the 0
-token_done:
+token_end:
+    addi a0, a0, -1             # move buffer pointer down to the space or the 0
+    sub a0, a0, t2              # store the start address in W (size 0: the end of the line)
     mv a1, t2                   # store the size in X
     add t0, a0, a1              # the address just after the token...
     li t2, TIB_BOTTOM
