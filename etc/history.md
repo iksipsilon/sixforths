@@ -50,7 +50,12 @@ What the GD32V tolerated and the QingKe V2 does not:
   The link base is 0 now.
 - One flash wait state at 24 MHz (without it the chip falls into a reset loop), and
   RCC_CFGR0 written wholesale (clearing HPRE alone left the console at half the baud rate
-  on the board).
+  on the board). The port's comment, and `old-docs/CH32V006.md`, concluded from this that
+  the V006 "resets with a /2 divider in some other CFGR0 field". It does not: on
+  2026-11-15 CFGR0 was read on the board with the chip halted at reset, and it held 0x20,
+  the manual's value (HPRE = SYSCLK / 3, every other field 0). The code that showed the
+  half speed is not in the repository; a write that leaves HPRE at 0001 or 1000 would
+  explain it, since both mean SYSCLK / 2.
 
 The dictionary and the compiler:
 - FiveForths hashed word names, and each `defcode` named the previous word's label. The

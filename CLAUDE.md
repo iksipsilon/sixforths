@@ -29,8 +29,10 @@ no session needs to read.
   be aligned, and the board has only run them 4-byte aligned.
 - **Zmmul has `mul` only.** No `div`, `rem`, `mulh`, `mulhu`. `um*` is built from
   16x16 `mul`s; `um/mod` is shift-and-subtract. The emulator also lacks `mulh*`.
-- 1 flash wait state at 24 MHz. CFGR0 is written wholesale to 0. The reasons are in
-  `uart_init` (`src/mcu.s`).
+- The chip starts at HCLK = 8 MHz: after reset `RCC_CFGR0` is 0x20, HPRE = SYSCLK / 3
+  (the manual says so, and the board gave the same when read halted at reset).
+  `uart_init` (`src/mcu.s`) sets 1 flash wait state, then writes CFGR0 wholesale to 0
+  for 24 MHz. The reasons are in its comments.
 - Standard halfword flash programming (PG) reportedly **corrupts neighbouring
   halfwords on real V006 silicon**. Use fast page operations instead, and note the
   **V006 fast page is 256 bytes** (the CH32V003's is 64): FTER erases a page, FTPG
@@ -283,6 +285,10 @@ What minichlink does, as seen on the board:
   not.
 - It sometimes prints `link error, nothing connected to linker` five times when it
   connects, then recovers and works; cause unknown.
+- A register's value at reset can be read without touching flash:
+  `minichlink -a -r <file> 0x40021000 0x28` resets the chip, halts it before its first
+  instruction and reads memory (here the ten RCC registers); `minichlink -b` then
+  restarts it. `RCC_PB2PCENR` reading 0 shows that `uart_init` has not run yet.
 - WSL may need the WCH-LinkE attached again (`usbipd attach --wsl --busid <id>` on
   Windows; `usbipd list` shows the id).
 

@@ -25,9 +25,9 @@
 
 ##
 # Clock (RCC), chapter 3
-# HSI is 24 MHz on the CH32V00x family and is the sysclk source at reset.
-# uart_init below forces the AHB prescaler to /1 so HCLK = 24 MHz
-# deterministically, regardless of the reset default of RCC_CFGR0.
+# HSI is 24 MHz on the CH32V00x family and is the sysclk source at reset,
+# divided by 3: the chip starts with HCLK = 8 MHz. uart_init below sets the
+# prescaler to /1, so HCLK = 24 MHz from there on.
 ##
 .equ CPU_FREQ, 24000000
 .equ RCC_BASE, 0x40021000       # Table 3-1
@@ -162,13 +162,13 @@ uart_init:
     sw t1, FLASH_ACTLR(t0)
 
     # force HCLK = SYSCLK = HSI (24 MHz)
-    # CFGR0 is written wholesale to 0, not only HPRE[7:4] cleared. Observed
-    # on hardware: a read-modify-write of HPRE alone left the UART clock at
-    # 12 MHz (output at exactly half baud), i.e. the V006 resets with a /2
-    # divider in some other CFGR0 field. ch32fun's SystemInit also does a
-    # full write (CFGR0 = RCC_HPRE_DIV1 = 0). Writing 0 selects HSI as sysclk
-    # (already active), all prescalers /1, MCO off, PLL bits cleared (PLL is
-    # off at reset) -- all safe.
+    # After reset CFGR0 is 0x20: HPRE = 0010, SYSCLK / 3, so HCLK is 8 MHz
+    # (3.4.2; the board gave the same when it was read halted at reset, with
+    # every other field 0). The whole register is written to 0, as ch32fun's
+    # SystemInit does: HSI as sysclk (already active), no prescaler, MCO off,
+    # the PLL source bit cleared (the PLL is off at reset). HPRE must become
+    # exactly 0000: 0001 and 1000 both mean SYSCLK / 2, which shows as a
+    # console at half the baud rate.
     li t0, RCC_BASE
     sw zero, RCC_CFGR0(t0)                  # HSI sysclk, every prescaler = /1
 
