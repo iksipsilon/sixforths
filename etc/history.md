@@ -12,7 +12,7 @@ of the source comments. Commit `60edebb` has both as they were before.
 sixforths began as a port of FiveForths (https://github.com/aw/FiveForths, MIT licence,
 see `LICENSE`), an indirect-threaded Forth in RISC-V assembly for the GD32VF103 (Longan
 Nano), to the WCH CH32V006F8U6 (RV32EC). Its working name was fotrh for a while; the test
-file `emulators/test_fotrh.py` still carries it. The branch `kernel-phase1` was cut from
+file was called `emulators/test_fotrh.py` until 2026-11-15. The branch `kernel-phase1` was cut from
 `extended-wordset`. `etc/flash-before-fable.bin` is the board's flash from before this
 kernel.
 
@@ -130,6 +130,12 @@ records:
   fill the TIB's last byte (a 255-character line used to make `token` read past the TIB);
   backspace clears the erased character in the TIB (two erasures and Enter used to end in
   `?`); `reset` no longer loads s1.
+- Later the same day: `token` got one exit for a space and for a 0 (a token followed
+  directly by a 0 came back with a wrong start address; 13,552 bytes); the `.balign CELL`
+  in front of code went (13,536 bytes); the reset value of RCC_CFGR0 was read on the
+  board; FiveForths' `README.md` and `old-docs/` were removed, and with them a stray
+  `emulators/test.py` (a test for a jonesforth port, booting a `jonesforth.bin` this
+  repository never had); `emulators/test_fotrh.py` became `emulators/test_sixforths.py`.
 
 ## From the old CLAUDE.md, word for word
 

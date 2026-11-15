@@ -254,7 +254,7 @@ Run from the repo root:
 
     make                              # sixforths.elf / .bin / .hex / .dump
     riscv64-unknown-elf-size sixforths.elf   # kernel size; text must stay under 16384
-    python3 emulators/test_fotrh.py   # boots sixforths.bin in the emulator, loads prelude.f, runs all tests
+    python3 emulators/test_sixforths.py   # boots sixforths.bin in the emulator, loads prelude.f, runs all tests
     python3 emulators/check_threads.py  # compares the threads in src/10-forth-words.s with the compiler's output
 
 The Makefile runs `riscv64-unknown-elf-as -g -march=rv32ec_zicsr_zmmul` with
@@ -327,7 +327,7 @@ Layout:
   words `mkey?` `mkey` `memit` `mtimeout` `>modem` `<modem`.
 - `emulators/` holds `rv32emu.py` (the owner's RV32EC emulator: alignment, RV32E register
   use, FPEC sequencing and illegal instructions all fault), `harness.py` (boots
-  `../sixforths.bin` in it), `test_fotrh.py` (the tests; it loads `../prelude.f`) and
+  `../sixforths.bin` in it), `test_sixforths.py` (the tests; it loads `../prelude.f`) and
   `check_threads.py`. Tests must pass before a change is called done.
 - `prelude.f` (repo root) is the place for Forth words that are still being developed. It
   is empty now. A word tried out there (or kept in the flash lines with `p`) is moved
@@ -350,13 +350,13 @@ Layout:
 
 ## How to work here
 
-1. After **every** change: run `make`, then `python3 emulators/test_fotrh.py`, and after a
+1. After **every** change: run `make`, then `python3 emulators/test_sixforths.py`, and after a
    change to `src/10-forth-words.s` also `python3 emulators/check_threads.py`. Report the
    kernel size against the 16 KiB cap and any test that fails. If a build or test
    fails, fix the cause; do not delete or loosen a test to make it pass. A change that
    should not alter the kernel (comments, names) is proven by an unchanged
    `sha256sum sixforths.bin`.
-2. Add a test in `emulators/test_fotrh.py` for every new word, including edge cases (negative
+2. Add a test in `emulators/test_sixforths.py` for every new word, including edge cases (negative
    numbers, zero, overflow, divide by zero, overlapping `move`). For a bug fix, write the
    test first and see it fail.
 3. **Never flash, wipe, or erase flash without asking first.** Before anything that
@@ -498,6 +498,6 @@ Also open:
   the TIB through the debugger right after such a startup:
   `minichlink -r <file> 0x20001D00 0x100`, then `minichlink -b`. Until this is
   understood, a script should send a throwaway line first and ignore its answer.
-- A pyserial backend for `emulators/test_fotrh.py`, so the same tests run against the real
+- A pyserial backend for `emulators/test_sixforths.py`, so the same tests run against the real
   board (and against the emulator through a fake port).
 - Optional: `?do`.

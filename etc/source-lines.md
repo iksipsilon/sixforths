@@ -461,7 +461,7 @@ a line can be changed.
 
 ## 11. What was checked, and where
 
-In the emulator (`emulators/test_fotrh.py`, the tests named "lines:", "p:", "list:"): the
+In the emulator (`emulators/test_sixforths.py`, the tests named "lines:", "p:", "list:"): the
 bytes of a slot, a shorter text over a longer one, the neighbours in a page, the limits of
 `p` `list` `load` `line`, a definition over several lines, erased lines and an erased page
 in a range, a full 63-character line followed by another, a `load` inside a loaded line,

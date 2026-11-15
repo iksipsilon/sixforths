@@ -2,7 +2,7 @@
 
 Written 2026-11-12 for the branch `kernel-phase1`. Each section says what was decided,
 why, and whether it is already in the kernel or still a plan. Everything marked *done*
-passes in the emulator (`emulators/test_fotrh.py`, 160 tests) and has **not yet run on
+passes in the emulator (`emulators/test_sixforths.py`, 160 tests) and has **not yet run on
 the board**. Things nobody has checked are collected at the end.
 
 ## 1. Registers
