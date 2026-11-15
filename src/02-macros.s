@@ -128,7 +128,7 @@ code_\label :                   # machine code follows, ending with NEXT
 
 # an error handler: print a message, then jump
 .macro print_error name, jump
-    .balign CELL
+    .balign 2                   # code after strings: back to an even address
   err_\name :
     print_message \name
     j \jump             # jump when print returns

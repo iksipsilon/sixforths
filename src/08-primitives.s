@@ -31,7 +31,6 @@
 # Code-field routines (not dictionary words: code fields point here)
 ##
 
-.balign CELL
 # docol: code-field action of a colon definition. NEXT leaves W (a0) = the
 # code field address; the thread starts in the next cell.
 docol:
@@ -44,21 +43,18 @@ docol:
 # variable/constant but lets any CREATEd word become a DOES> word later.
 # NEXT leaves W (a0) = the code field address on entry to all three actions.
 
-.balign CELL
 # dovar_code: code-field action of VARIABLE and CREATEd words ( -- pfa )
 dovar_code:
     addi t1, a0, 2*CELL         # skip the code field and the DOES> slot
     PUSH t1
     NEXT
 
-.balign CELL
 # docon_code: code-field action of CONSTANT ( -- x )
 docon_code:
     lw t1, 2*CELL(a0)
     PUSH t1
     NEXT
 
-.balign CELL
 # dodoes_code: code-field action of words whose defining word used DOES>
 # ( -- pfa ) then runs the action thread whose address sits in the DOES> slot.
 dodoes_code:
@@ -68,7 +64,6 @@ dodoes_code:
     PUSH t1
     NEXT
 
-.balign CELL
 # dovoc_code: code-field action of a vocabulary (fig-Forth's DOVOC): executing
 # the vocabulary's name makes it the CONTEXT, the one searched first.
 dovoc_code:
@@ -720,7 +715,6 @@ defcode "um*",3,,UMSTAR
     sw a4, 0(s0)                # hi (top)
     NEXT
 
-.balign CELL
 # udiv64: unsigned 64/32 division, 32-step restoring (shift and subtract: the
 # QingKe V2C has no divide instruction).
 # arguments: a1 = dividend low, t1 = dividend high, a2 = divisor
@@ -748,7 +742,6 @@ udiv64_next:
     bnez t2, udiv64_loop
     ret
 
-.balign CELL
 # sdivmod: signed 32/32 division, truncating (the quotient rounds toward
 # zero and the remainder takes the sign of the dividend, like C).
 # arguments: a1 = dividend, a2 = divisor
@@ -1420,7 +1413,6 @@ defcode ">body",5,,TBODY
     sw t1, 0(s0)
     NEXT
 
-.balign CELL
 # unlink from one vocabulary every word at or above an address
 # arguments: a2 = head cell of the vocabulary, a1 = the address
 # (within a chain the addresses fall from link to link, and flash is below RAM)

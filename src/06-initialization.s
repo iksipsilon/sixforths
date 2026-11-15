@@ -4,7 +4,7 @@
 
 message boot, "sixforths v0.0\n\n"
 
-.balign CELL
+.balign 2               # code after a string: back to an even address
 # board boot initializations
 boot:
     # The machine stack first, for interrupt frames (HPE) and the return
@@ -110,7 +110,6 @@ reset_boot:
     la t1, in_console
     sw t1, 0(t0)
 
-.balign CELL
 # reset the RAM from the last defined word
 ram_init:
     li t0, var_HERE     # load HERE memory address
@@ -134,7 +133,6 @@ ram_zerofill:
 ram_done:
     # continue to tib_init
 
-.balign CELL
 # reset the terminal input buffer
 tib_init:
     # initialize TOIN variable

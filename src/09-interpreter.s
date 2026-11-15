@@ -2,8 +2,6 @@
 # Interpreter
 ##
 
-.balign CELL
-
 # here's where the program starts (the interpreter)
 interpreter_start:
     li t2, TIB_BOTTOM                           # load TIB memory address
@@ -105,7 +103,6 @@ process_backspace:
     call uart_put           # ...and move left again
     j interpreter
 
-.balign CELL
 replace_newline:
     li a0, CHAR_SPACE       # convert newline to a space
     sb a0, -1(a1)           # replace previous newline character with space in W register
@@ -160,7 +157,6 @@ execute:
 .loop: .word .dloop         # double indirect jump to interpreter
 .dloop: .word process_token # indirect jump to interpreter after executing a word
 
-.balign CELL
 compile:
     mv a0, a1               # copy the word header address into W
     call to_cfa             # compute the code field address (variable-length names)

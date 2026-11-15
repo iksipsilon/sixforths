@@ -8,7 +8,9 @@
 # The trap handler: every exception and the NMI come here through the vector
 # table at 0x0 (sixforths.s). The QingKe V2 manual (section 2.2 and the mtvec
 # table) requires a 1 KiB-aligned table, and 0x0 is one; the table holds this
-# handler's address, so the handler itself needs no such alignment.
+# handler's address, so the handler itself needs no such alignment. It is
+# 4-byte aligned, like tick_isr: the manual does not say how a routine named
+# in the table must be aligned, and the board has only run them that way.
 # It prints 'T' followed by mcause and mepc in hex on the console (USART1),
 # then hangs with all state intact for the debugger: if a trap fires, the
 # terminal says why and where.

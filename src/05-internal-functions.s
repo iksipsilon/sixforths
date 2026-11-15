@@ -189,7 +189,6 @@ lookup:
     mv a1, a2                   # return the word header address in X
     ret
 
-.balign CELL
 # make_header: build a dictionary header at HERE
 # arguments: a0 = name address, a1 = name length (1..31), a2 = code field
 #            value, a3 = initial flags (0, or F_HIDDEN)

@@ -150,7 +150,6 @@
 .equ TICK_PERIOD, STK_TICKS_PER_MS * 2   # a tick every 2 ms
 .equ TICK_MARGIN, 100           # ticks (33 us): how far ahead of the count a new compare must be
 
-.balign CELL
 # Initialize the clock and the console UART (USART1)
 uart_init:
     # The CH32V00x family requires 1 flash wait state for 15 MHz < SYSCLK <=
@@ -202,7 +201,6 @@ uart_init:
 
     ret
 
-.balign CELL
 # Initialize the GPIO: USART1's default mapping is TX = PD5, RX = PD6, i.e.
 # port D CFGLR nibbles 5 and 6
 # returns: a0 = skip button (0 = released, SKIP_BIT = held)

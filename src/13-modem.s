@@ -14,7 +14,6 @@
 ##
 
 .text
-.balign CELL
 # set up the clocks, the PD2/PD3 remap, DMA channel 7, USART2 and the pins.
 # Called from boot. After `reboot` the channel and USART2 are still running,
 # so both are switched off first; bytes not yet read are dropped.

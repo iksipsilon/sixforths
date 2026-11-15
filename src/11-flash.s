@@ -13,7 +13,6 @@
 # which is fine.
 ##
 
-.balign CELL
 # unlock the FPEC for programming (KEYR) and fast erase (MODEKEYR).
 # Called once at boot; the FPEC stays unlocked (this is a dev system whose
 # whole point is self-programming).
@@ -30,7 +29,6 @@ flash_unlock:
     sw t1, FLASH_MODEKEYR(t0)
     ret
 
-.balign CELL
 # fast-program one 256-byte page from RAM; the page must be erased
 # (reference manual 18.4.5: FTPG, BUFRST, 64 x (word store + BUFLOAD),
 # FLASH_ADDR, STRT)
@@ -76,7 +74,6 @@ fpage_prog_bsy3:
     sw zero, FLASH_CTLR(t0)     # fast page programming mode off
     ret
 
-.balign CELL
 # fast-erase one 256-byte flash page
 # arguments: a0 = page address (0x08...-based, 256-byte aligned)
 # clobbers: t0, t1
@@ -102,7 +99,6 @@ fpage_erase_bsy1:
 # Source lines
 ##
 
-.balign CELL
 # the slot of a line
 # arguments: a0 = line number
 # returns: a0 = address of its slot; jumps to the error handler unless the
@@ -245,7 +241,6 @@ wipe_done:
 # Flash page words for the application's data (above the lines)
 ##
 
-.balign CELL
 # check a page address for the two words below
 # arguments: a0 = any address in the page
 # returns: a0 = the page address (rounded down to 256 bytes); jumps to the

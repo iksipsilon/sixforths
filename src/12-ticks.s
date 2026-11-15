@@ -11,7 +11,6 @@
 ##
 
 .text
-.balign CELL
 # start the counter from 0 on HCLK/8 (no auto-reload) with its compare
 # interrupt, the tick, every TICK_PERIOD; switch on HPE. Called from boot with
 # interrupts off (mstatus.MIE, set at the end of boot). After `reboot` the
@@ -45,6 +44,9 @@ ticks_init:
 # the next compare would already be past (or too close to catch), it is put a
 # whole period after now. A compare in the past would not match again until
 # the counter wraps, 23.9 minutes later.
+# The .balign CELL above is kept on purpose, as for trap_handler: the hardware
+# enters both through the vector table, the manual does not say how such an
+# entry must be aligned, and the board has only run them 4-byte aligned.
 tick_isr:
     li t0, STK_BASE
     lw t1, STK_CMPLR(t0)
