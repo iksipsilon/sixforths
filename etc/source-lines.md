@@ -269,7 +269,8 @@ else is touched.
     the time. Measured: 5 of 398 ticks lost during ten `p`. `ticks` and `ms` are not
     affected, because they read the hardware counter.
   - The modem's receiver stores its bytes by DMA, which kept working during an erase
-    (measured in phase 2 step 3). During programming this has not been measured.
+    (measured on the board, see "Time, modem, I/O vectors" in `CLAUDE.md`). During
+    programming this has not been measured.
 - **Wear.** A page endures at least 100,000 erase cycles (datasheet). Every `p` is one
   cycle for one page. Sending a whole file rewrites each page 4 times (once per line).
   That allows 25,000 full uploads.

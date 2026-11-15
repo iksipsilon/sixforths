@@ -4,7 +4,8 @@
 # USART2 runs on PD2 (TX, QFN pin 16) / PD3 (RX, pin 17) at MODEM_BAUD. DMA1
 # channel 7 copies every byte it receives into MRING (01-variables-
 # constants.s), round and round, without the core: it kept every byte while
-# the core stood still for 16 flash page erases (CLAUDE.md, phase 2 step 3).
+# the core stood still for 16 flash page erases (measured on the board, see
+# "Time, modem, I/O vectors" in CLAUDE.md).
 # No interrupt. The channel counts down from MRING_SIZE and reloads, so the
 # write offset is (MRING_SIZE - DMA_CNTR7) and (MRING_SIZE - 1); var_MRD is the
 # read offset, and equal offsets mean "nothing new".

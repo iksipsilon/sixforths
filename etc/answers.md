@@ -230,9 +230,9 @@ One of each and no more:
 ## 9. Not checked by anyone yet
 
 - The whole branch on the real chip: phase 2 steps 1 to 5a passed there on 2026-11-12
-  (`CLAUDE.md`); the source lines passed there on 2026-11-14; the word `fpage-prog` has not run there yet.
+  (`etc/history.md`); the source lines passed there on 2026-11-14; the word `fpage-prog` has not run there yet.
 - ~~Whether the DMA keeps storing bytes while a flash page is erased.~~ It does (checked
-  2026-11-12 with USART1 and DMA channel 5, see phase 2 step 3 in `CLAUDE.md`), so the
+  2026-11-12 with USART1 and DMA channel 5, see phase 2 step 3 in `etc/history.md`), so the
   call log may be written while the modem talks. Page programming was not tried.
 - Whether the A7670E has the "DC" / "MC" / "RC" lists (`AT+CPBS=?` shows it). The plan
   does not depend on them.
