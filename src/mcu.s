@@ -18,7 +18,6 @@
 # linker.ld names the RAM too (LENGTH = 8k) but places nothing there; keep
 # the two equal.
 .equ RAM_SIZE, 1024 * 8                 # 8 KiB
-.equ STACK_SIZE, 256                    # 256 Bytes
 
 # UART (USART1 on the CH32V006; default mapping: TX = PD5, RX = PD6)
 .equ UART_BASE_ADDRESS, 0x40013800

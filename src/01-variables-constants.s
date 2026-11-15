@@ -6,11 +6,14 @@
 # Memory map
 ##
 
-# DSP, RSP, TIB stacks grow downward from the top of memory
+# The two stacks grow downward from the top of memory. The terminal input
+# buffer (TIB) lies under them and is filled upwards.
+.equ STACK_SIZE, 256                    # each of the two stacks: 64 cells
+.equ TIB_SIZE, 256                      # one input line
 .equ DSP_TOP, RAM_BASE + RAM_SIZE       # address of top of data stack
 .equ RSP_TOP, DSP_TOP - STACK_SIZE      # address of top of return stack
 .equ TIB_TOP, RSP_TOP - STACK_SIZE      # address of top of terminal buffer
-.equ TIB_BOTTOM, TIB_TOP - STACK_SIZE   # address of bottom of terminal buffer
+.equ TIB_BOTTOM, TIB_TOP - TIB_SIZE     # address of bottom of terminal buffer
 
 # variables
 # They sit under the TIB, above the machine stack. Nothing checks sp on the
