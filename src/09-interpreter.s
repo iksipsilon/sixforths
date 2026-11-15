@@ -15,8 +15,8 @@ interpreter:
     call uart_get                               # read a character from UART
     li a5, CHAR_NEWLINE                         # load newline into temporary
     bne a0, a5, interpreter_char                # not a newline: filter and echo it below
-    # CH32V006 PORT: echo the newline too, so the line's output (and "ok")
-    # starts on the next line instead of right after the input
+    # Echo the newline too, so the line's output (and "ok") starts on the
+    # next line instead of right after the input
     call uart_put                               # send the newline to UART
     j skip_send
 
@@ -26,16 +26,15 @@ interpreter_char:
     li a5, CHAR_CARRIAGE                        # load 0x0D carriage return into temporary
     beq a0, a5, interpreter                     # ignore the character if it matches
 
-    # CH32V006 PORT: swallow ANSI terminal escape sequences (arrow keys,
-    # Delete key, F-keys...) so they do not pollute the TIB as token bytes.
+    # Swallow ANSI terminal escape sequences (arrow keys, Delete key,
+    # F-keys...) so they do not pollute the TIB as token bytes.
     # ESC [ ... <final 0x40-0x7E> is a CSI sequence; ESC O <byte> is SS3.
     li a5, 0x1B                                 # ESC
     beq a0, a5, skip_escape
 
-    # CH32V006 PORT: handle erase characters BEFORE echoing, so the erase
-    # sequence renders correctly, and accept DEL (0x7F) in addition to BS
-    # (0x08) -- most terminals (and picocom by default) send DEL for the
-    # backspace key, which upstream stored into the TIB as a token byte.
+    # Handle erase characters BEFORE echoing, so the erase sequence renders
+    # correctly, and accept DEL (0x7F) in addition to BS (0x08): most
+    # terminals (and picocom by default) send DEL for the backspace key.
     li a5, CHAR_BACKSPACE                       # 0x08
     beq a0, a5, process_backspace
     li a5, 0x7F                                 # DEL
@@ -51,7 +50,6 @@ skip_send:
     li t0, CHAR_COMMENT_OPARENS                 # load opening parens into temporary
     beq a0, t0, skip_oparens                    # skip the opening parens if it matches
 
-interpreter_tib:
     # add the character to the TIB
     li a5, TIB_TOP                              # load TIB_TOP memory address
     bge a1, a5, err_tib                         # error if the terminal input buffer is full
@@ -89,9 +87,9 @@ skip_ss3:
     j interpreter
 
 process_backspace:
-    # CH32V006 PORT: nothing was echoed for the erase key (see above), so if
-    # the TIB is empty there is nothing to do at all; otherwise remove the
-    # last buffered character and erase it on screen with BS, space, BS.
+    # Nothing was echoed for the erase key (see above), so if the TIB is
+    # empty there is nothing to do at all; otherwise remove the last buffered
+    # character and erase it on screen with BS, space, BS.
     beq a1, t2, interpreter # nothing to erase if TOIN == TIB
     addi a1, a1, -1         # remove the last character from the TIB
     li a0, '\b'
@@ -124,7 +122,7 @@ process_token:
     mv a0, a2               # restore a0
     mv a1, a3               # restore a1
 
-    # CH32V006 PORT: look the token up by name (a0 = address, a1 = length)
+    # look the token up by name (a0 = address, a1 = length)
     call lookup             # search the context vocabulary, then FORTH;
                             # a1 = word header address
 
@@ -148,16 +146,12 @@ execute:
     mv a0, a1               # copy the word header address into W
     call to_cfa             # compute the code field address (variable-length names)
     lw t0, 0(a0)            # load memory address from W into temporary
-execute_done:
     jr t0                   # jump to the address in temporary
 
-# CH32V006 PORT BUGFIX: these two data words are read with lw via the IP
-# register (NEXT does `lw a0, 0(s1)` with s1 pointing here). With compressed
-# instructions the preceding code can end on any 2-byte boundary, so without
-# an explicit .balign these words can land at address 2 mod 4. The GD32V's
-# Bumblebee core performs misaligned loads in hardware; the QingKe V2 traps
-# (mcause=4, observed on hardware at exactly this load). Data read by lw
-# must be CELL-aligned on this core.
+# These two data words are read with lw through the IP register (NEXT does
+# `lw a0, 0(s1)` with s1 pointing here). With compressed instructions the
+# code before them can end on any 2-byte boundary, and a misaligned lw traps
+# on the QingKe V2 (mcause = 4), hence the .balign.
 .balign CELL
 .loop: .word .dloop         # double indirect jump to interpreter
 .dloop: .word process_token # indirect jump to interpreter after executing a word
@@ -168,15 +162,14 @@ compile:
     call to_cfa             # compute the code field address (variable-length names)
     li t1, var_HERE         # load HERE variable into temporary
     lw t2, 0(t1)            # load HERE value into temporary
-    # CH32V006 PORT BUGFIX: dictionary bounds check, like `,` (there was none,
-    # so a long definition could run past the dictionary into the buffers)
+    # dictionary bounds check, like `,`: a long definition must not run past
+    # the dictionary into the buffers
     li t0, DICT_TOP
     bge t2, t0, err_mem
     sw a0, 0(t2)            # write the code field address (still in W) to the current definition
 
     addi t0, t2, CELL       # increment HERE by 4
     sw t0, 0(t1)            # store new HERE address
-compile_done:
     j process_token
 
 push_number:
@@ -187,7 +180,7 @@ push_number:
     # push to memory if STATE = 1 (compile)
     li t1, var_HERE         # load HERE variable into temporary
     lw t2, 0(t1)            # load HERE value into temporary
-    # CH32V006 PORT BUGFIX: room for two cells, like ['] (there was no check)
+    # room for two cells, like [']
     li t0, DICT_TOP-CELL
     bge t2, t0, err_mem
     la t0, LIT              # load the codeword address of LIT into temporary
