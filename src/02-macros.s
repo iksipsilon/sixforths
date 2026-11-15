@@ -3,10 +3,10 @@
 ##
 
 # jump to the next subroutine (ITC), appended to each primitive
-# CH32V006 PORT: the temporary is a5, not t0. The 2-byte forms of lw/sw
-# through a pointer only take s0, s1 and a0-a5 (both registers), so with
-# IP = s1, W = a0 and a5 all four instructions are compressed: 8 bytes instead of 10 for every
-# NEXT. Nothing is live in a5 when a word ends.
+# The temporary is a5. The 2-byte forms of lw/sw through a pointer only take
+# s0, s1 and a0-a5 (both registers), so with IP = s1, W = a0 and a5 all four
+# instructions are compressed: 8 bytes for every NEXT. Nothing is live in a5
+# when a word ends.
 .macro NEXT
     lw a0, 0(s1)        # load memory address from IP into W
     addi s1, s1, CELL   # increment IP by CELL size
@@ -21,7 +21,7 @@
 .endm
 
 # push register to top of stack and move DSP
-# CH32V006 PORT: the DSP moves first, then the store (2 bytes shorter: a
+# The DSP moves first, then the store (2 bytes shorter than storing first: a
 # negative offset cannot be compressed). So do not PUSH s0 itself: copy it to
 # a register first (see sp@).
 .macro PUSH reg
@@ -50,9 +50,7 @@
     addi tp, tp, CELL   # increment RSP by 1 cell
 .endm
 
-# Dictionary words, as in jonesforth
-# CH32V006 PORT: upstream hashed the name and took the previous word's label
-# as an argument. Now:
+# Dictionary words, as in jonesforth:
 #   defcode name, namelen, flags=0, label    a word written in assembly
 #   defword name, namelen, flags=0, label    a colon word written as a thread
 # e.g.  defcode "1+",2,,ONEPLUS              defword "2+",2,,TWOPLUS
@@ -112,9 +110,9 @@ code_\label :                   # machine code follows, ending with NEXT
 .endm
 
 # a message for the console: msg_X is its start, end_X its end
-# CH32V006 PORT: the lengths were counted by hand at each use; now a label
-# marks the end. (A length computed as end - start does not always assemble:
-# the RISC-V assembler leaves some label differences to the linker.)
+# A label marks the end, so no length is counted by hand. (A length computed
+# as end - start does not always assemble: the RISC-V assembler leaves some
+# label differences to the linker.)
 .macro message name, text
   msg_\name : .ascii "\text"
   end_\name :

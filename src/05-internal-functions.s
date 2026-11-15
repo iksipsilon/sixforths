@@ -18,9 +18,6 @@ to_cfa:
 
 # obtain the next word (token) from the terminal input buffer and move TOIN
 # past it
-# CH32V006 PORT: upstream's `token` took the buffer address, and each of its
-# six callers worked that out from TOIN before the call and moved TOIN after
-# it. Both are done here now.
 # returns: a0 = token start address, a1 = token size (length in bytes; 0 = the
 #          line is used up)
 # clobbers: t0, t1, t2
@@ -71,14 +68,9 @@ number:
     addi a1, a1, -1             # decrement the string length by 1
     beqz a1, number_error       # jump to error if the number is only a minus '-'
 number_check:
-    # CH32V006 PORT BUGFIX: upstream compared the first two characters with a
-    # single lhu against 0x7830 ("0x", little-endian). Tokens sit at arbitrary
-    # byte offsets inside the TIB, so that halfword load is misaligned
-    # whenever a token starts at an odd address. The GD32V's Bumblebee core
-    # performs misaligned halfword loads in hardware; the QingKe V2 traps
-    # (mcause=4, observed on hardware at exactly this instruction, with the
-    # symptom depending on token position parity in the line). Two byte
-    # loads are alignment-immune and semantically identical.
+    # Two byte loads, not one lhu compared with "0x": a token sits at any byte
+    # offset in the TIB, and a misaligned halfword load traps on the QingKe
+    # V2 (mcause = 4).
     lbu t2, 0(a0)               # load the first character
     li a4, '0'
     bne t2, a4, number_digit    # not '0': jump to the number digit loop
@@ -93,14 +85,6 @@ number_check:
     beqz a1, number_error       # jump to error if the number is only '0x'
 number_digit:
     beqz a1, number_done        # if the size of the buffer is 0 then we're done
-    # CH32V006 PORT: the only `mul` in the kernel. It requires the Zmmul
-    # extension (QingKe V2C has it; build with ARCH=rv32ec_zicsr_zmmul,
-    # binutils >= 2.39). Shift-add fallback if your binutils is older
-    # (a4 is dead at this point in the loop):
-    #     slli a4, t0, 3          # n * 8
-    #     slli t0, t0, 1          # n * 2
-    #     add  t0, t0, a4         # n * 10   (decimal path)
-    # (a branch on t1==16 doing `slli t0, t0, 4` would be needed for hex)
     mul t0, t0, t1              # multiply the number by the number base (10 or 16)
     lbu t2, 0(a0)               # load next character into temporary
     addi a0, a0, 1              # increment buffer address by 1 character
@@ -169,7 +153,7 @@ search_done:
     ret
 
 # search the way the text interpreter does: the CONTEXT vocabulary first, then
-# FORTH (CH32V006 PORT: vocabularies, see the words in 08-primitives.s). A
+# FORTH (vocabularies: see the words in 08-primitives.s). A
 # vocabulary is known by the address of its head cell, the cell that holds the
 # header of its newest word; FORTH's head cell is var_LATEST.
 # arguments: a0 = name address, a1 = name length
@@ -257,14 +241,10 @@ mkh_code:
     ret
 
 # drop a half-built colon definition: called from reset, i.e. after every error.
-# CH32V006 PORT: replaces upstream's restorevars macro. That one ran only when
-# a word was not found in compile state and trusted that LATEST was the word
-# being compiled. Two consequences: an error inside [ ... ], a full dictionary
-# or an oversized token left a hidden header and its cells behind, and a typo
-# after a stray `]` removed the last finished word (or, with no RAM word yet,
-# pointed HERE into flash). A word is hidden exactly while it is being
-# compiled, so that flag decides: if the newest word is hidden, unlink it and
-# give its memory back.
+# A word is hidden exactly while it is being compiled, so that flag decides:
+# if the newest word is hidden, unlink it and give its memory back. That
+# covers every error (a word not found, an error inside [ ... ], a full
+# dictionary, an oversized token) and never removes a finished word.
 # clobbers: t0, t1, t2
 abandon_def:
     li t0, var_CURRENT

@@ -5,17 +5,13 @@
 .balign CELL
 .global interrupt_handler
 .type interrupt_handler, @function
-# CH32V006 PORT: two changes here.
-# 1) Traps go through the vector table at 0x0 (sixforths.s): the QingKe V2
-#    manual (section 2.2 and the mtvec table) requires a 1 KiB-aligned
-#    table, and 0x0 is one. The table holds this handler's address, so the
-#    handler itself needs no alignment (a .balign 1024 here used to cost
-#    ~1.6 KB of padding).
-# 2) Instead of a bare mret, the handler is a forensic beacon: it prints 'T'
-#    followed by mcause and mepc in hex over the UART, then hangs with all
-#    state intact for the debugger. If a trap fires, the terminal says why.
-#    It uses USART1, the development console; once the A7670E gets a UART,
-#    the beacon must stay on whichever UART is the console.
+# The trap handler: every exception and the NMI come here through the vector
+# table at 0x0 (sixforths.s). The QingKe V2 manual (section 2.2 and the mtvec
+# table) requires a 1 KiB-aligned table, and 0x0 is one; the table holds this
+# handler's address, so the handler itself needs no such alignment.
+# It prints 'T' followed by mcause and mepc in hex on the console (USART1),
+# then hangs with all state intact for the debugger: if a trap fires, the
+# terminal says why and where.
 interrupt_handler:
     li t0, UART_BASE_ADDRESS
     li t2, 'T'
@@ -59,15 +55,12 @@ interrupt_init:
     # disable global interrupts
     csrc mstatus, 0x08  # mstatus = 0x300
 
-    # CH32V006 PORT: removed `csrs mie, zero`. The QingKe V2 core does not
-    # implement the mie/mip CSRs; interrupt sources are gated by the PFIC
-    # peripheral instead, and every PFIC channel is disabled at reset, so
-    # there is nothing to clear. Touching an unimplemented CSR could trap
-    # before mtvec below is even set.
+    # The QingKe V2 core has no mie/mip CSRs to clear: interrupt sources are
+    # gated by the PFIC, and every PFIC channel is disabled at reset.
 
-    # set interrupt handler jump address
-    # (CH32V006 PORT: mtvec = 0x0 | 3: vector table at 0x0, see sixforths.s;
-    # MODE0 = 1: entry at base + number*4, MODE1 = 1: entries are addresses)
+    # set the trap vector: mtvec = 0x0 | 3, the vector table at 0x0 (see
+    # sixforths.s); MODE0 = 1: entry at base + number*4, MODE1 = 1: entries
+    # are addresses
     li t0, 3
     csrw mtvec, t0      # mtvec = 0x305
 
