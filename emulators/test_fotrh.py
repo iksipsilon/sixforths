@@ -274,6 +274,11 @@ check("a line of 254 characters is interpreted", e, out, ["\nA   ok"], absent=("
 out, _ = h.feed(e, "65 emit".ljust(255) + "\n66 emit\n")
 check("a line of 255 characters: tib full, nothing above the TIB is read, the next line works", e, out,
       ["? tib full", "\nB"], absent=("\nA",))
+# erased characters must not come back: Enter overwrites only the first of them
+e, out, _ = h.session(P, "1 2 3\x7f\x7f\n.s\n")
+check("two characters erased with DEL, then Enter", e, out, [".s\n1 2    ok"], absent=("?",))
+e, out, _ = h.session(P, "1 2 3 4 5\x08\x08\x08\x08\n.s\n")
+check("four characters erased with BS, then Enter", e, out, [".s\n1 2 3    ok"], absent=("?",))
 
 # ---- key? ----
 e, out, _ = h.session(P, "key? .\n")

@@ -91,9 +91,12 @@ skip_ss3:
 process_backspace:
     # Nothing was echoed for the erase key (see above), so if the TIB is
     # empty there is nothing to do at all; otherwise remove the last buffered
-    # character and erase it on screen with BS, space, BS.
+    # character and erase it on screen with BS, space, BS. The character is
+    # cleared in the TIB too: the newline will overwrite only one byte, and
+    # whatever else lay after the line would be parsed as part of it.
     beq a1, t2, interpreter # nothing to erase if TOIN == TIB
     addi a1, a1, -1         # remove the last character from the TIB
+    sb zero, 0(a1)          # and clear it: what follows the line stays 0
     li a0, '\b'
     call uart_put           # move the cursor left...
     li a0, ' '
