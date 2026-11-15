@@ -1,11 +1,8 @@
 ##
 # CH32V006F8U6 (QingKe V2C, RV32EC + Zmmul; QFN20, 62 KiB flash, 8 KiB SRAM)
 #
-# CH32V006 PORT: this file is a full rewrite of src/mcus/gd32vf103/mcu.s.
-# The WCH peripheral map is STM32F1-flavoured like the GD32VF103's, so the
-# register offsets are mostly identical; what changed is the port/pins
-# (USART1 on PD5/PD6 instead of USART0 on PA9/PA10), the RCC enable bits,
-# and the clock (HSI = 24 MHz instead of the GD32V's 8 MHz IRC).
+# The chip's constants (RAM size, register addresses and bits, pins) and the
+# two routines that set up the clock, the console UART and its pins.
 #
 # Register facts cross-checked against the ch32fun project headers
 # (ch32x00xhw.h, used for CH32V005/006/007):
@@ -16,12 +13,11 @@
 ##
 
 .equ CELL, 4                            # 32-bits cell size
-.equ RAM_BASE, 0x20000000               # base address of RAM (same as GD32V)
-# CH32V006 PORT: RAM_SIZE was the only line of the old board file (board.s).
+.equ RAM_BASE, 0x20000000               # base address of RAM
 # 01-variables-constants.s builds the RAM map down from RAM_BASE + RAM_SIZE.
 # linker.ld names the RAM too (LENGTH = 8k) but places nothing there; keep
 # the two equal.
-.equ RAM_SIZE, 1024 * 8                 # 8 KiB (the Longan Nano had 20 KiB)
+.equ RAM_SIZE, 1024 * 8                 # 8 KiB
 .equ STACK_SIZE, 256                    # 256 Bytes
 
 # UART (USART1 on the CH32V006; default mapping: TX = PD5, RX = PD6)
@@ -30,8 +26,8 @@
 .equ UART_RX_DATA, 0x04         # data register offset (USART_DATAR)
 .equ UART_TX_STATUS, 0x00       # USART status register offset (USART_STATR)
 .equ UART_TX_DATA, 0x04         # data register offset (USART_DATAR)
-.equ UART_RX_BIT, (1 << 5)      # read data register not empty bit (RXNE) - same bit as GD32V RBNE
-.equ UART_TX_BIT, (1 << 7)      # transmit data register empty bit (TXE) - same bit as GD32V TBE
+.equ UART_RX_BIT, (1 << 5)      # read data register not empty bit (RXNE)
+.equ UART_TX_BIT, (1 << 7)      # transmit data register empty bit (TXE)
 
 # Clock: HSI is 24 MHz on the CH32V00x family and is the sysclk source at
 # reset. uart_init below forces the AHB prescaler to /1 so HCLK = 24 MHz
@@ -40,7 +36,7 @@
 .equ BAUD_RATE, 115200
 
 ##
-# FPEC (flash controller) - CH32V006 PORT, for the source lines and the user flash
+# FPEC (flash controller), for the source lines and the user flash
 # Per the CH32V00x reference manual V1.5, chapter 18. The V006 fast page is
 # 256 bytes (the CH32V003's is 64): fast erase (FTER) and fast programming
 # (FTPG, through a 256-byte page buffer) both work on whole pages and need
@@ -64,7 +60,7 @@
 .equ FLASH_PAGE, 256            # fast page size in bytes
 
 ##
-# Skip button - CH32V006 PORT
+# Skip button
 # PD4 is configured as an input with pull-down; holding it HIGH (button to
 # 3V3) during reset keeps line 0 from loading and boots to a bare ok prompt.
 # Active-high so that an unwired pin (and the emulator's all-zero GPIO
@@ -78,7 +74,7 @@
 .equ SKIP_BIT, (1 << 4)         # PD4
 
 ##
-# SysTick (STK) - CH32V006 PORT, for ticks and ms (13-ticks.s)
+# SysTick (STK), for ticks and ms (13-ticks.s)
 # Reference manual V1.5, 6.5.4 "STK Register Description" (Table 6-5), and
 # QingKe V2 processor manual V1.3, chapter 4: a 32-bit up-counter in the
 # core, clocked by HCLK or HCLK/8. All four registers reset to 0.
@@ -94,7 +90,7 @@
 .equ STK_CTLR_STRE, (1 << 3)    # 1: restart from 0 at the compare value, 0: keep counting up
 .equ STK_TICKS_PER_MS, CPU_FREQ / 8 / 1000   # HCLK/8 = 3 MHz: 3000 ticks per ms
 
-# CH32V006 PORT: the tick interrupt (13-ticks.s), SysTick's compare match
+# The tick interrupt (13-ticks.s), SysTick's compare match
 .equ IRQ_SYSTICK, 12            # RM 6.2: interrupt 12, vector table entry 12 (address 0x30)
 .equ PFIC_IENR0, 0xE000E100     # processor manual 3.1, Table 3-2: interrupt enable set,
                                 # bit n lets interrupt n through (write 1, write-only)
@@ -104,7 +100,7 @@
 .equ TICK_MARGIN, 100           # ticks (33 us): how far ahead of the count a new compare must be
 
 ##
-# Modem UART - CH32V006 PORT, for 14-modem.s: USART2 on PD2 (TX) / PD3 (RX),
+# Modem UART, for 14-modem.s: USART2 on PD2 (TX) / PD3 (RX),
 # its receiver emptied by DMA1 channel 7. Reference manual V1.5 sections given.
 ##
 .equ RCC_BASE, 0x40021000
@@ -143,30 +139,28 @@
 .balign CELL
 # Initialize the UART
 uart_init:
-    # CH32V006 PORT BUGFIX: the CH32V00x family requires 1 flash wait state
-    # for 15 MHz < HCLK <= 25 MHz (and 2 above that), per the TRM -- unlike
-    # the CH32V003, which runs 0-wait to 25 MHz. Raising HCLK to 24 MHz with
-    # the 0-wait reset default corrupts instruction fetches and the chip
-    # falls into a reset loop. Must be set BEFORE the prescaler change below.
+    # The CH32V00x family requires 1 flash wait state for 15 MHz < HCLK <=
+    # 25 MHz (and 2 above that), per the TRM -- unlike the CH32V003, which
+    # runs 0-wait to 25 MHz. Raising HCLK to 24 MHz with the 0-wait reset
+    # default corrupts instruction fetches and the chip falls into a reset
+    # loop. Must be set BEFORE the prescaler change below.
     li t0, 0x40022000                       # load base address of the FLASH controller
     li t1, 1                                # FLASH_ACTLR_LATENCY_1 (one wait state)
     sw t1, 0x00(t0)                         # store in FLASH_ACTLR
 
     # force HCLK = SYSCLK = HSI (24 MHz)
-    # CH32V006 PORT BUGFIX: write CFGR0 wholesale to 0 instead of only
-    # clearing HPRE[7:4]. Observed on hardware: a read-modify-write of HPRE
-    # alone left the UART clock at 12 MHz (output at exactly half baud), i.e.
-    # the V006 resets with a /2 divider in some other CFGR0 field. ch32fun's
-    # SystemInit also does a full write (CFGR0 = RCC_HPRE_DIV1 = 0). Writing
-    # 0 selects HSI as sysclk (already active), all prescalers /1, MCO off,
-    # PLL bits cleared (PLL is off at reset) -- all safe.
+    # CFGR0 is written wholesale to 0, not only HPRE[7:4] cleared. Observed
+    # on hardware: a read-modify-write of HPRE alone left the UART clock at
+    # 12 MHz (output at exactly half baud), i.e. the V006 resets with a /2
+    # divider in some other CFGR0 field. ch32fun's SystemInit also does a
+    # full write (CFGR0 = RCC_HPRE_DIV1 = 0). Writing 0 selects HSI as sysclk
+    # (already active), all prescalers /1, MCO off, PLL bits cleared (PLL is
+    # off at reset) -- all safe.
     li t0, 0x40021000                       # load base address of the RCC
     sw zero, 0x04(t0)                       # RCC_CFGR0 = 0: HSI sysclk, every prescaler = /1
 
-    # enable the peripheral clocks
-    # (CH32V006 PORT: IOPDEN bit 5 for port D instead of PAEN bit 2 for
-    # port A; USART1EN is bit 14 as on the GD32V; AFIO not needed since we
-    # use the default pin mapping)
+    # enable the peripheral clocks of USART1 and port D (AFIO is not needed
+    # here: USART1 uses its default pin mapping)
     lw t1, 0x18(t0)                         # load value from the APB2 enable register (RCC_APB2PCENR)
     li t2, (1 << 14) | (1 << 5)             # set USART1EN (bit 14), IOPDEN (bit 5)
     or t1, t1, t2                           # add the enabled bits to the existing value
@@ -187,27 +181,23 @@ uart_init:
     # disable hardware flow control, half-duplex, etc
     sw zero, 0x14(t0)                       # store the value in the USART Control register 3 (USART_CTLR3)
 
-    # enable receiver, transmitter, uart
-    # (CH32V006 PORT: the GD32V code also set RBNEIE/TCIE/TBEIE interrupt
-    # enables; dropped here since the interrupt handler is a stub, interrupts
-    # are globally disabled, and all PFIC channels are off at reset)
+    # enable receiver, transmitter, uart (no USART interrupt enable is set:
+    # the console is polled)
     li t1, (1 << 2) | (1 << 3) | (1 << 13)  # set RE (bit 2), TE (bit 3), UE (bit 13)
     sw t1, 0x0C(t0)                         # store the value in the USART Control register 1 (USART_CTLR1)
 
-uart_done:
     ret
 
 .balign CELL
-# Initialize the GPIO
-# (CH32V006 PORT: USART1 default mapping is TX = PD5, RX = PD6, i.e. port D
-# CFGLR nibbles 5 and 6, instead of the GD32V's PA9/PA10 in CTL1)
+# Initialize the GPIO: USART1's default mapping is TX = PD5, RX = PD6, i.e.
+# port D CFGLR nibbles 5 and 6
 # returns: a0 = skip button (0 = released, SKIP_BIT = held)
 # clobbers: t0, t1, t2, a1, a2
 gpio_init:
     li t0, 0x40011400                       # load base address of GPIOD
     lw t1, 0x00(t0)                         # load value from the Port config register low (GPIOD_CFGLR)
 
-    # CH32V006 PORT: sample the skip button (PD4) with PD5 driven low.
+    # Sample the skip button (PD4) with PD5 driven low.
     # On the WeAct board the closed solder bridges SB3/SB4 join PD4 to PD5
     # (through USB D-, 33 R + 1.5 k). As the UART TX, PD5 idles high; released
     # as an input, it is still pulled high by the WCH-LinkE's RX. Either way
@@ -252,5 +242,4 @@ gpio_settle:
     sw a2, 0x00(t0)                         # PD5 is the UART TX again (idle high)
     andi a0, a0, SKIP_BIT                   # keep the button (PD4)
 
-gpio_done:
     ret
