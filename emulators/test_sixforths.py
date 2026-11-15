@@ -364,6 +364,9 @@ lt("line", "0 line u. 1 line 0 line - . 159 line hex u.", "134234112 64 80067C0 
 lt("line beyond the last", "160 line", "  ?")
 lt("line -1", "-1 line", "  ?")
 lt("line reads the text", "20 line c@ emit 20 line 12 + c@ .", ":10 ")
+# the lines being loaded belong to the interpreter: key takes the x from the console, not the 6 of line 51
+lt("key in a loaded line waits for the console, the next line stays whole",
+   "50 p key emit\n51 p 65 emit\n50 51 load\nx", "key emit\nx   ok\n65 emit\nA   ok\n")
 e = copy.deepcopy(t0e)
 e.f[LINES0 + 5 * 256:LINES0 + 6 * 256] = b"\xff" * 256      # a power cut left the page of lines 20-23 erased
 out, _ = h.feed(e, "20 31 load\n")

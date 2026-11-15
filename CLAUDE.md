@@ -246,6 +246,9 @@ I/O vectors (`src/04-io-helpers.s`, the words in `08-primitives.s` and `13-modem
   `.s` `dump`) send through; `var_IN` points at an input table (get, ready) that `key`
   and `key?` use. `>console` `>modem` and `<console` `<modem` set them; the keypad and
   the display will add theirs. The modem's `key` gives -1 after `mtimeout` ms.
+- The console's `key` and `key?` look at the UART only. The lines being loaded are read
+  by the interpreter alone, so a `key` in a loaded line waits for the keyboard and the
+  lines after it stay whole (a main loop started from a loaded line can poll the console).
 - The REPL's echo, `ok`, the error messages, the banner and the trap line always use the
   console, and `reset` (boot and every error) sets both vectors back to the console.
 - `mkey?` `mkey` `memit` stay as words of their own: the phone's main loop polls the

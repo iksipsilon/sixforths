@@ -27,6 +27,7 @@ uart_get_src:
     ret
 uart_get_end:
     sw zero, 0(t0)              # all input from the UART now
+# the console's UART alone: `key` enters here (in_console below)
 uart_get_hw:
     li t0, USART1_BASE          # the console's UART (mcu.s)
 uart_get_loop:
@@ -104,8 +105,10 @@ console_ready:
     neg a0, a0
     ret
 
-# the console as an input source for var_IN: get (uart_get, which serves the
-# lines loaded from flash too), ready
+# the console as an input source for var_IN: get, ready. Both look at the
+# UART only (uart_get_hw, not uart_get): the lines being loaded belong to the
+# interpreter. `key` in a loaded line waits for the keyboard, the lines after
+# it stay whole, and key? says whether key would wait.
 .balign CELL
 in_console:
-    .word uart_get, console_ready
+    .word uart_get_hw, console_ready

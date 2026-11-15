@@ -95,8 +95,9 @@ by starting the phone's main word.
 - **Comments are not stored.** The REPL removes `( ... )` and `\` comments before a word
   ever sees the line (this is an old property of the kernel, see `CLAUDE.md`, "REPL
   quirks"). The commented master copy of the source is a file on the PC.
-- **Do not call `key` or `key?` from a loaded line.** While lines are loaded, `key` takes
-  its characters from the lines, not from the console.
+- **`key` in a loaded line waits for the console.** The lines being loaded are read by the
+  interpreter alone; `key` and `key?` look at the UART, so a main loop started from a
+  loaded line can poll the keyboard, and the lines after it stay whole.
 - **Nothing is saved by just typing.** Only `p` writes.
 
 ### Recovery

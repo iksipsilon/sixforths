@@ -1479,7 +1479,9 @@ forget_here:
 # set by <console <modem >console >modem and by reset.
 
 # key ( -- x )          The next character from the input source (<console,
-# <modem). The modem gives -1 if nothing came within mtimeout ms.
+# <modem). The console's waits for the UART, also while lines are loaded:
+# those are read by the interpreter only. The modem gives -1 if nothing came
+# within mtimeout ms.
 defcode "key",3,,KEY
     li t0, var_IN
     lw t0, 0(t0)        # the input table
@@ -1488,10 +1490,8 @@ defcode "key",3,,KEY
     PUSH a0             # store character into top of data stack
     NEXT
 
-# key? ( -- f )         True if the input source has a character waiting.
-# The console's looks at the hardware only: while lines are loaded `key` is
-# served from the flash instead, so do not call key or key? from
-# loaded lines.
+# key? ( -- f )         True if the input source has a character waiting
+# (the console's: in the UART, where key takes it from).
 defcode "key?",4,,KEYQ
     li t0, var_IN
     lw t0, 0(t0)        # the input table
