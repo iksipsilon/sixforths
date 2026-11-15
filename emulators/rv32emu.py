@@ -47,6 +47,15 @@ class Emu:
         # the WCH-LinkE's RX pull-up, so PD4 reads low only while PD5 is a
         # general-purpose output driving 0 (checked on the board)
         self.weact_bridge = False
+        # The WCH-LinkE powering up with the board: for the board's first
+        # linke_starting bytes on USART1 the LinkE's TX does not drive PD6
+        # (the console RX) yet. A floating PD6 (CNF6:MODE6 = 0b0100) then
+        # picks up PD5 (the console TX) on the neighbouring wire, so each byte
+        # sent is also received; the receiver holds one byte and loses those
+        # that come while it is full. On the board, with the LinkE's TX
+        # disconnected, the REPL's echo of what it heard ran on for 135-180
+        # bytes of 's'; with PD6's pull-up nothing came back.
+        self.linke_starting = 0
         # the machine stack, (lowest address, top): when set, an interrupt
         # taken with sp outside it, or with no room for the 48-byte HPE frame,
         # faults. min_sp is the lowest sp any frame has reached.
@@ -213,17 +222,25 @@ class Emu:
         if a & 1:
             self.fault = ("misaligned-load16", self.pc, a); raise RuntimeError()
         return self.r8(a) | self.r8(a+1)<<8
+    def uart1_send(self, v):
+        # a byte written to USART1_DATAR (see linke_starting)
+        self.uart_out.append(v)
+        if self.linke_starting > 0:
+            self.linke_starting -= 1
+            if (self.gpiod_cfglr >> 24) & 0xF == 0b0100 and not self.uart_in:
+                self.uart_in.append(v)
+
     def w8(self, a, v):
         v &= 0xFF
         if 0x20000000 <= a < 0x20002000: self.ram[a-0x20000000] = v; return
-        if a == 0x40013804: self.uart_out.append(v); return
+        if a == 0x40013804: self.uart1_send(v); return
         if 0x40000000 <= a < 0x50000000: return  # RCC/GPIO etc: ignore
         self.fault = ("store", self.pc, a); raise RuntimeError()
     def w32(self, a, v):
         if a & 3:
             self.fault = ("misaligned-store", self.pc, a); raise RuntimeError()
         self.stores.append((self.pc, a, v & M32)); self.stores = self.stores[-16:]
-        if a == 0x40013804: self.uart_out.append(v & 0xFF); return
+        if a == 0x40013804: self.uart1_send(v & 0xFF); return
         if a == 0xE000F000:  # STK_CTLR: STE (bit 0), STIE (bit 1), STCLK (bit 2)
             if v & ~0x7 & M32:
                 self.fault = ("stk-unmodelled", self.pc, a); raise RuntimeError()

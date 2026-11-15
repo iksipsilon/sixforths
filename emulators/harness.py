@@ -38,10 +38,11 @@ def run_idle(e, max_steps=60_000_000):
         pass
     return -1
 
-def boot(flash=None):
+def boot(flash=None, linke_starting=0):
     flash = flash if flash is not None else open(BIN, "rb").read()
     e = Emu(flash, b"")
     e.mstack = (SYM["MSP_BOTTOM"], SYM["MSP_TOP"])     # interrupts must find sp in here
+    e.linke_starting = linke_starting                  # see rv32emu.py
     run_idle(e)
     return e
 

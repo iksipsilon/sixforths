@@ -230,17 +230,29 @@ gpio_settle:
 
     # Step 2: prepare the final configuration in a2: TX on pin 5 of port D,
     # MODE5 = 1 (output), CNF5 = 10 (alternate function push-pull) -> nibble
-    # 0b1001; RX on pin 6, MODE6 = 0 (input), CNF6 = 01 (floating input) ->
-    # nibble 0b0100. a1 is the same with PD5 a general purpose push-pull
-    # output (0b0001) whose latch is 0.
+    # 0b1001; RX on pin 6, MODE6 = 0 (input), CNF6 = 10 (input with
+    # pull-up/pull-down) -> nibble 0b1000, with OUTDR bit 6 = 1 = pull-up
+    # (7.3.1.1, 7.3.1.3; Table 7-3 allows a pull-up on a USART RX). a1 is the
+    # same with PD5 a general purpose push-pull output (0b0001) whose latch
+    # is 0.
+    # Why the pull-up: while the WCH-LinkE powers up with the board, its TX
+    # does not drive PD6 for some milliseconds. A floating PD6 then picks up
+    # PD5 on the neighbouring wire: on the board the receiver heard the
+    # banner, and the REPL's echo of it came back again, a run of up to 66
+    # 's' left in the TIB (and 135-180 with the LinkE's TX disconnected). The
+    # pull-up (35-55 k, datasheet) stopped it; the LinkE's TX overrides it.
     li t2, ~((0xf << (4*5)) | (0xf << (4*6)))
     and t1, t1, t2                          # clear the pin 5 and pin 6 bits
-    li t2, (0b1001 << (4*5)) | (0b0100 << (4*6))
+    li t2, (0b1001 << (4*5)) | (0b1000 << (4*6))
     or a2, t1, t2                           # a2 = TX on PD5, RX on PD6
-    li t2, (0b0001 << (4*5)) | (0b0100 << (4*6))
+    li t2, (0b0001 << (4*5)) | (0b1000 << (4*6))
     or a1, t1, t2                           # a1 = the same with PD5 a plain output
     li t2, (1 << 5)
     sw t2, GPIOD_BCR(t0)                    # PD5 output latch = 0
+    li t2, (1 << 6)
+    sw t2, GPIOD_BSHR(t0)                   # PD6 output latch = 1: pull-up, set
+                                            # before the pin becomes an input with
+                                            # pull, so it never passes pull-down
 
     # Step 3: the sample. TX is low only from this store to the next one,
     # ~0.5 us (about a sixteenth of a bit at 115200 baud), too short for the

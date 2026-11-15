@@ -436,6 +436,14 @@ check("lines: line 0 loads with PD4 tied to PD5 (WeAct SB3/SB4)", e, out, ["emit
 h.feed(e, "reboot\n")                            # software reboot: PD5 is TX right now
 out, _ = h.feed(e, "3 sq 48 + emit\n")
 check("lines: ... and after a software reboot", e, out, ["emit\n9"])
+# WCH-LinkE powering up with the board: its TX does not drive PD6 for a while,
+# and a floating PD6 hears PD5; the REPL's echo would fill the TIB with 's'
+r = h.boot(linke_starting=64)
+out, _ = h.feed(r, "1 .\n")
+pd6 = f"PD6={(r.gpiod_cfglr >> 24) & 0xF:04b} latch={(r.gpiod_out >> 6) & 1}"
+check("console: PD6 has its pull-up, nothing is heard while the WCH-LinkE starts", r,
+      pd6 + " " + bytes(r.uart_out).decode("latin1"),
+      ["PD6=1000 latch=1 sixforths v0.0\n\n1 .\n1    ok\n"], absent=("ss",))
 # emulator guards: the FPEC model must reject what the V006 cannot do
 e = copy.deepcopy(B0)                            # boot unlocked the FPEC
 e.f[LOG0] = 0x00                                 # page 0x4000 is not erased
