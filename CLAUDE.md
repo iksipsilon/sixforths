@@ -432,13 +432,29 @@ RX to PD5 (the console's TX), the LinkE's TX to PD6 (the console's RX).
 
 ## The board now
 
-- It runs commit `3a4d650` (13,544 bytes). The repo is one kernel change ahead: `comma`
-  (13,420 bytes), tested in the emulator only.
+- It runs commit `6161c34` (13,420 bytes), the kernel in the repo.
 - Its source lines and its user flash are empty (all 0xFF, read back). A wire joins D2
   and D3 (the USART2 loopback; D2 is driven as an output at every boot) and the board's
   USB-C socket is unplugged. Nothing else is connected.
 - Before trusting any of this after a pause: `make`, run the tests, and read the board's
   flash back to see what it really holds.
+- Checked on the board on `6161c34` (`comma`; nearly every routine has moved since
+  `3a4d650`):
+  - An unaligned HERE while compiling prints `?` where older kernels trapped: a word, a
+    number, `;`, `'` and `if` after `[ 3 allot ]` or `[ 65 c, ]`, a number after a `then`
+    at an unaligned HERE, and the same in a loaded line (the lines after it are
+    abandoned). The word is gone, `here` and `latest` are back. Bytes behind `litstring`
+    that end with `align` work; `,` after `c,` rounds up.
+  - The compiler: words, numbers, `'` `[']`, `do` `loop`, `if` `else` `then`, `begin`
+    `until`, `."` `s"`, `variable` `constant` `does>`, `literal` `recurse`, a definition
+    over two typed lines and one over two loaded lines, a vocabulary.
+  - A full dictionary: at the second cell of a number, at `;`, in the header (each
+    prints `? memory full` and the word is gone); `: zy dup ;` fits in 20 bytes exactly
+    and not in 16.
+  - Besides: an error with 3 cells on the stack, `3 allot nosuchword`, `words` (184
+    names), the tick (50 in 100 ms), `memit` `mkey` `>modem` through the D2-D3 wire,
+    `/mod` `um*` `hex`, `p` `list` `load` `wipe`, `reboot`; the read-back showed the
+    kernel equal to `sixforths.bin`, the lines and the user flash empty.
 - Checked on the board on `3a4d650`, which differs from `e4e4587` in the two things
   tested here:
   - Comments: what stands before a `\` comment runs when its line ends, a line that is
