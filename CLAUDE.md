@@ -115,7 +115,8 @@ no session needs to read.
   word) cannot be told from data: it compiles, and crashes when the word runs.
 - No word stores into the header of a kernel word (it is in flash). `;` ends the definition
   that is open, which it knows by the hidden flag of the newest word; with none open it is
-  an error and appends nothing. `immediate` is an error unless the newest word is in RAM.
+  an error and appends nothing. `immediate` and `xdoes` (the runtime of `does>`) are an
+  error unless the newest word is in RAM.
 - After every error `reset` calls `abandon_def`: if the newest word is still hidden (a word
   is hidden exactly while it is compiled) it is unlinked and HERE moves back. `reset` also
   puts CONTEXT and CURRENT back to FORTH, and the I/O vectors back to the console.
@@ -135,7 +136,7 @@ no session needs to read.
 
 - Flash 0x00000000: kernel + `.rodata`, **must stay under 16 KiB** (`FLASH` `LENGTH` in
   `linker.ld` at the repo root; confirm it says 16k).
-  Currently 13,456 bytes (184 words). Report the size after every change.
+  Currently 13,464 bytes (184 words). Report the size after every change.
 - Flash 0x08004000-0x08006800 (`LINES_BASE`..`LINES_TOP`, 10 KiB): 160 source lines of
   64 bytes (see "Source lines in flash").
 - Flash 0x08006800-0x0800F800 (`USER_FLASH`..`FLASH_TOP`, 36 KiB): the application's own
@@ -435,7 +436,8 @@ RX to PD5 (the console's TX), the LinkE's TX to PD6 (the console's RX).
 
 ## The board now
 
-- It runs commit `ba2cb4e` (13,456 bytes), the kernel in the repo.
+- It runs commit `ba2cb4e` (13,456 bytes). The kernel in the repo (13,464 bytes) adds the
+  check in `xdoes` and is not on the board yet.
 - Checked on the board on `ba2cb4e` (the checks in `;` and `immediate`): on the fresh
   board `;`, `immediate`, `] ;` and `;` in an empty vocabulary each print `?`; a `;` with
   no definition open leaves `here` where it was; `: sq dup * ;`, `immediate` on a RAM

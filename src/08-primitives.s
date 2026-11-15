@@ -217,10 +217,16 @@ defcode "docol",5,,DOCOLW
 # code field at dodoes_code, records the action thread in the DOES> slot, then
 # returns from the defining word (the thread after it must not run now).
 #   : does> ' xdoes , ; immediate
+# A kernel word cannot be changed: it is in flash (below RAM_BASE), so with no
+# word in RAM yet, or in an empty vocabulary, it is an error. Nothing checks
+# that the newest word was made by CREATE: after a colon definition the two
+# stores land in that word's code field and the first cell of its thread.
 defcode "xdoes",5,,XDOES
     li a0, var_CURRENT
     lw a0, 0(a0)
     lw a0, 0(a0)                # header of the word CREATE just made
+    li t0, RAM_BASE
+    bltu a0, t0, err_error      # a word in flash, or none at all (0)
     call to_cfa                 # a0 = its code field (clobbers t0)
     la t1, dodoes_code
     sw t1, 0(a0)                # code field -> dodoes_code

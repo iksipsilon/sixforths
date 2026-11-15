@@ -165,16 +165,23 @@ t("bytes laid into a thread behind litstring, aligned by hand: they are data, no
   ": ld [ ' litstring , 3 , 65 c, 66 c, 67 c, align ] type ; ld", "ld\nABC")
 
 # ; ends the definition that is open (its word is still hidden); with none open it is an error,
-# and immediate refuses a word in flash: neither may store into the header of a kernel word
+# and immediate and xdoes (the runtime of does>) refuse a word in flash: none of them may store
+# into a kernel word
 for name, src in (("; with only flash words", ";"), ("] ; with only flash words", "] ;"),
                   ("immediate with only flash words", "immediate"),
                   ("; in an empty vocabulary", "vocabulary ev ev definitions ;"),
-                  ("immediate in an empty vocabulary", "vocabulary ev ev definitions immediate")):
+                  ("immediate in an empty vocabulary", "vocabulary ev ev definitions immediate"),
+                  ("xdoes with only flash words", "xdoes"),
+                  ("xdoes in an empty vocabulary", "vocabulary ev ev definitions xdoes"),
+                  ("does> without create in an empty vocabulary",
+                   ": mk does> @ ; vocabulary ev ev definitions mk")):
     e, out, _ = h.session(B0, src + "\n65 emit\n")
     check(f"{name}: an error, nothing is stored", e, out, ["  ?\n", "emit\nA   ok\n"])
 t("; with no definition open appends nothing and leaves the last word alone",
   "variable h0 : keep 5 ; here @ h0 ! ;\nhere @ h0 @ = . keep .", "  ?\n", "keep .\n-1 5 ", absent=())
 t("immediate on a word in RAM still works", ": im 65 emit ; immediate : u im ;", "im ;\nA   ok\n")
+t("does> on a word in a vocabulary still works",
+  ": c2 create , does> @ ; vocabulary ev ev definitions 42 c2 kk kk .", "42 ")
 
 # a definition that runs out of dictionary is dropped whole, wherever it runs
 # out: in its header, a number, a word, or at ; (zz takes 40 or 28 bytes)
