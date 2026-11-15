@@ -82,8 +82,8 @@ reset_boot:
     # Interrupts on (the tick, 12-ticks.s). At boot this is the first time;
     # after an error they are on already.
     csrs mstatus, 0x08
-    la s1, interpreter_start    # initialize IP register
     li tp, RSP_TOP              # initialize RSP register
+    # (IP, s1, needs no value here: execute loads it before every word)
 
     # initialize STATE variable
     li t0, var_STATE    # load STATE variable
