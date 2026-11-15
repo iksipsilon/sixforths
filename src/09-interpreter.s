@@ -138,9 +138,8 @@ process_token:
     or t0, t0, t1           # logical OR the immediate flag and state
     addi t0, t0, -1         # decrement the result by 1
     beqz t0, compile        # compile the word if the result is 0
-    j execute               # explicitly jump to the execute label
+                            # otherwise fall through and execute it
 
-.balign CELL
 execute:
     la s1, .loop            # load the address of the interpreter into the IP register
     mv a0, a1               # copy the word header address into W
