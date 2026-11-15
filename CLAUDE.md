@@ -435,8 +435,13 @@ RX to PD5 (the console's TX), the LinkE's TX to PD6 (the console's RX).
 
 ## The board now
 
-- It runs commit `6161c34` (13,420 bytes). The repo is one kernel change ahead: the checks
-  in `;` and `immediate` (13,456 bytes), tested in the emulator only.
+- It runs commit `ba2cb4e` (13,456 bytes), the kernel in the repo.
+- Checked on the board on `ba2cb4e` (the checks in `;` and `immediate`): on the fresh
+  board `;`, `immediate`, `] ;` and `;` in an empty vocabulary each print `?`; a `;` with
+  no definition open leaves `here` where it was; `: sq dup * ;`, `immediate` on a RAM
+  word, an unaligned HERE in a definition (`?`), the tick (50 in 100 ms), `reboot`; the
+  read-back showed the kernel equal to `sixforths.bin`, the lines and the user flash
+  empty.
 - Its source lines and its user flash are empty (all 0xFF, read back). A wire joins D2
   and D3 (the USART2 loopback; D2 is driven as an output at every boot) and the board's
   USB-C socket is unplugged. Nothing else is connected.
