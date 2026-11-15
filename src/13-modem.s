@@ -61,12 +61,12 @@ modem_init:
     li t0, GPIOD_BASE
     li t1, (1 << 3)
     sw t1, GPIOD_BSHR(t0)       # PD3 output latch = 1: pull-up, not pull-down (7.3.1.3)
-    lw t1, 0x00(t0)             # GPIOD_CFGLR (7.3.1.1): per pin CNF[1:0], reserved, MODE
+    lw t1, GPIOD_CFGLR(t0)      # 7.3.1.1: per pin CNF[1:0], reserved, MODE
     li t2, ~(0xf << (4*3))
     and t1, t1, t2
     li t2, (0b1000 << (4*3))
     or t1, t1, t2
-    sw t1, 0x00(t0)             # PD3: CNF = 10 input with pull-up, MODE = 0 input
+    sw t1, GPIOD_CFGLR(t0)      # PD3: CNF = 10 input with pull-up, MODE = 0 input
 
     li t0, USART2_BASE
     li t1, (CPU_FREQ / MODEM_BAUD)
@@ -78,12 +78,12 @@ modem_init:
 
     # TX pin last, so the line is already idle high when PD2 starts driving it
     li t0, GPIOD_BASE
-    lw t1, 0x00(t0)             # GPIOD_CFGLR
+    lw t1, GPIOD_CFGLR(t0)
     li t2, ~(0xf << (4*2))
     and t1, t1, t2
     li t2, (0b1001 << (4*2))
     or t1, t1, t2
-    sw t1, 0x00(t0)             # PD2: CNF = 10 alternate push-pull, MODE = 1 output
+    sw t1, GPIOD_CFGLR(t0)      # PD2: CNF = 10 alternate push-pull, MODE = 1 output
     ret
 
 # is a modem byte waiting that has not been read? a0 = -1 if so, else 0

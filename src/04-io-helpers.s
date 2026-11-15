@@ -28,22 +28,22 @@ uart_get_src:
 uart_get_end:
     sw zero, 0(t0)              # all input from the UART now
 uart_get_hw:
-    li t0, UART_BASE_ADDRESS    # load UART base address (USART1, defined in mcu.s)
+    li t0, USART1_BASE          # the console's UART (mcu.s)
 uart_get_loop:
-    lw t1, UART_RX_STATUS(t0)   # load value from status register
-    andi t1, t1, UART_RX_BIT    # load read data buffer not empty bit
+    lw t1, USART_STATR(t0)      # load value from status register
+    andi t1, t1, USART_STATR_RXNE # is a received byte waiting?
     beqz t1, uart_get_loop      # loop until ready to receive
-    lbu a0, UART_RX_DATA(t0)    # read character (zero-extended) from data register
+    lbu a0, USART_DATAR(t0)     # read character (zero-extended) from data register
 
     ret
 
 uart_put:
-    li t0, UART_BASE_ADDRESS    # load UART base address (USART1, defined in mcu.s)
+    li t0, USART1_BASE          # the console's UART (mcu.s)
 uart_put_loop:
-    lw t1, UART_TX_STATUS(t0)   # load value from status register
-    andi t1, t1, UART_TX_BIT    # load transmit data buffer empty bit
+    lw t1, USART_STATR(t0)      # load value from status register
+    andi t1, t1, USART_STATR_TXE # can the data register take a byte?
     beqz t1, uart_put_loop      # loop until ready to send
-    sb a0, UART_TX_DATA(t0)     # send character to data register
+    sb a0, USART_DATAR(t0)      # send character to data register
 
     ret
 
@@ -97,9 +97,9 @@ out_print_done:
 
 # is a console character waiting? a0 = -1 if one is, else 0. clobbers t0, t1
 console_ready:
-    li t0, UART_BASE_ADDRESS
-    lw t1, UART_RX_STATUS(t0)
-    andi t1, t1, UART_RX_BIT
+    li t0, USART1_BASE
+    lw t1, USART_STATR(t0)
+    andi t1, t1, USART_STATR_RXNE
     snez a0, t1
     neg a0, a0
     ret

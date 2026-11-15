@@ -13,20 +13,20 @@
 # then hangs with all state intact for the debugger: if a trap fires, the
 # terminal says why and where.
 trap_handler:
-    li t0, UART_BASE_ADDRESS
+    li t0, USART1_BASE
     li t2, 'T'
 beacon_putc:
-    lw t1, UART_TX_STATUS(t0)   # poll TXE
-    andi t1, t1, UART_TX_BIT
+    lw t1, USART_STATR(t0)      # poll TXE
+    andi t1, t1, USART_STATR_TXE
     beqz t1, beacon_putc
-    sw t2, UART_TX_DATA(t0)     # send 'T'
+    sw t2, USART_DATAR(t0)      # send 'T'
     csrr a1, mcause             # first value to print
     li a3, 2                    # two passes: mcause, then mepc
 beacon_word:
     li a2, 8                    # 8 hex nibbles per word
 beacon_nibble:
-    lw t1, UART_TX_STATUS(t0)
-    andi t1, t1, UART_TX_BIT
+    lw t1, USART_STATR(t0)
+    andi t1, t1, USART_STATR_TXE
     beqz t1, beacon_nibble
     srli t2, a1, 28             # take the top nibble
     addi t2, t2, '0'            # '0'..'9'
@@ -34,16 +34,16 @@ beacon_nibble:
     ble t2, t1, beacon_digit
     addi t2, t2, 'A'-'9'-1      # 'A'..'F'
 beacon_digit:
-    sw t2, UART_TX_DATA(t0)
+    sw t2, USART_DATAR(t0)
     slli a1, a1, 4              # move next nibble to the top
     addi a2, a2, -1
     bnez a2, beacon_nibble
     li t2, ' '                  # separator between the two values
 beacon_sep:
-    lw t1, UART_TX_STATUS(t0)
-    andi t1, t1, UART_TX_BIT
+    lw t1, USART_STATR(t0)
+    andi t1, t1, USART_STATR_TXE
     beqz t1, beacon_sep
-    sw t2, UART_TX_DATA(t0)
+    sw t2, USART_DATAR(t0)
     csrr a1, mepc               # second value to print
     addi a3, a3, -1
     bnez a3, beacon_word
