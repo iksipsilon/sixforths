@@ -236,6 +236,38 @@ mkh_code:
     sw gp, 0(t0)                # HERE = just after the code field
     ret
 
+# comma: append one cell to the dictionary at HERE
+# arguments: a0 = the cell
+# Every cell that is appended goes through here: the word `,`, a word or a
+# number the interpreter compiles, the EXIT of `;`, the literal of `'`.
+# HERE may be unaligned after `c,` or an odd `allot`, and the store would then
+# trap. What that means depends on STATE:
+#   - interpreting: the bytes are data (create x 65 c, 1 ,), so HERE is
+#     rounded up to the next CELL boundary;
+#   - compiling: rounding up would leave a gap in the thread, which the inner
+#     interpreter would run as if it were a word. That is an error (?), and
+#     reset drops the definition. Bytes that belong in a thread (behind a
+#     word that steps IP over them, as litstring does) end with `align`.
+# A full dictionary ends in the error handler too, so a caller needs no check
+# of its own.
+# clobbers: a3, a4, a5 (a0, a1 and a2 are preserved)
+comma:
+    li a4, var_HERE
+    lw a5, 0(a4)                # HERE
+    andi a3, a5, CELL-1
+    beqz a3, comma_store        # aligned, as nearly always
+    lw a3, var_STATE-var_HERE(a4) # (the variables are neighbours)
+    bnez a3, err_error          # compiling: the thread would have a gap
+    addi a5, a5, CELL-1         # data: round HERE up
+    andi a5, a5, -CELL
+comma_store:
+    li a3, DICT_TOP
+    bgeu a5, a3, err_mem        # dictionary full
+    sw a0, 0(a5)                # store the cell
+    addi a5, a5, CELL
+    sw a5, 0(a4)                # advance HERE
+    ret
+
 # drop a half-built colon definition: called from reset, i.e. after every error.
 # A word is hidden exactly while it is being compiled, so that flag decides:
 # if the newest word is hidden, unlink it and give its memory back. That

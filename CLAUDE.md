@@ -102,8 +102,17 @@ no session needs to read.
   absolute addresses. `emit` sends exactly one byte (no leading space).
 - `number` parses decimal or `0x` hex (uppercase A-F). There is no BASE for input;
   `base` (a RAM cell, `var_BASE`) only affects output words.
-- HERE may be unaligned after `c,` or an odd `allot`. `,`, `:`, `create` and the error path
-  round it up themselves; a misaligned `sw` would trap.
+- Every cell is appended by `comma` (`05-internal-functions.s`): the word `,`, a word or a
+  number the interpreter compiles, the EXIT of `;`, the literal of `'`. It checks for a
+  full dictionary, so its callers do not.
+- HERE may be unaligned after `c,` or an odd `allot`; a misaligned `sw` would trap. `:`,
+  `create` and the error path round it up themselves, and so does `comma` while
+  interpreting (the bytes are data: `create x 65 c, 1 ,`). **While a definition is
+  compiled `comma` does not round up**: the thread would get a gap that the inner
+  interpreter runs as a word, so an unaligned HERE is an error there (`?`, the definition
+  is dropped). Bytes that belong in a thread stand behind a word that steps IP over them
+  (as `litstring` does) and end with `align`. An aligned gap (`[ 4 allot ]` with no such
+  word) cannot be told from data: it compiles, and crashes when the word runs.
 - After every error `reset` calls `abandon_def`: if the newest word is still hidden (a word
   is hidden exactly while it is compiled) it is unlinked and HERE moves back. `reset` also
   puts CONTEXT and CURRENT back to FORTH, and the I/O vectors back to the console.
@@ -123,7 +132,7 @@ no session needs to read.
 
 - Flash 0x00000000: kernel + `.rodata`, **must stay under 16 KiB** (`FLASH` `LENGTH` in
   `linker.ld` at the repo root; confirm it says 16k).
-  Currently 13,544 bytes (184 words). Report the size after every change.
+  Currently 13,420 bytes (184 words). Report the size after every change.
 - Flash 0x08004000-0x08006800 (`LINES_BASE`..`LINES_TOP`, 10 KiB): 160 source lines of
   64 bytes (see "Source lines in flash").
 - Flash 0x08006800-0x0800F800 (`USER_FLASH`..`FLASH_TOP`, 36 KiB): the application's own
@@ -423,7 +432,8 @@ RX to PD5 (the console's TX), the LinkE's TX to PD6 (the console's RX).
 
 ## The board now
 
-- It runs commit `3a4d650` (13,544 bytes), the kernel in the repo.
+- It runs commit `3a4d650` (13,544 bytes). The repo is one kernel change ahead: `comma`
+  (13,420 bytes), tested in the emulator only.
 - Its source lines and its user flash are empty (all 0xFF, read back). A wire joins D2
   and D3 (the USART2 loopback; D2 is driven as an output at every boot) and the board's
   USB-C socket is unplugged. Nothing else is connected.

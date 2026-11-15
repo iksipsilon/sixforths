@@ -150,6 +150,20 @@ t("a stray ] and a typo leave the last word alone", ": keep 5 ; ] nosuchword\nke
 e, out, _ = h.session(B0, "] nosuchword\n: sq dup * ; 7 sq 16 + emit\n")
 check("... also when no RAM word exists yet", e, out, ["emit\nA"], absent=())
 
+# an unaligned HERE while a definition is compiled: the next cell would leave a gap in the
+# thread, so appending it is an error (not a misaligned store, which traps on the chip)
+for name, src in (("a word after [ 3 allot ]", ": bad [ 3 allot ] dup ;"), ("a number after [ 3 allot ]", ": bad [ 3 allot ] 7 ;"),
+                  ("; after [ c, ]", ": bad [ 65 c, ] ;"), ("' after [ c, ]", ": bad [ 65 c, ] ' dup ;"),
+                  ("if after [ c, ]", ": bad [ 65 c, ] if then ;"), ("a number after then at an unaligned HERE", ": bad if [ 65 c, ] then 66 emit ;")):
+    e, out, nums = here_after(src)
+    check(f"unaligned HERE while compiling, {name}: an error, the definition is dropped", e,
+          out + f" same={len(nums) == 2 and nums[0] == nums[1]}", ["  ?", "same=True"], absent=())
+    e, out, _ = h.session(P, src + "\nbad\n65 emit\n")
+    check(f"... its name is gone and the console works ({name})", e, out + f" errors={out.count('  ?')}",
+          ["errors=2", "emit\nA"], absent=())
+t("bytes laid into a thread behind litstring, aligned by hand: they are data, not a gap",
+  ": ld [ ' litstring , 3 , 65 c, 66 c, 67 c, align ] type ; ld", "ld\nABC")
+
 # a definition that runs out of dictionary is dropped whole, wherever it runs
 # out: in its header, a number, a word, or at ; (zz takes 40 or 28 bytes)
 TOP = h.SYM["DICT_TOP"]

@@ -502,9 +502,12 @@ defcode "pad",3,,PADADDR
     NEXT
 
 # allot ( n -- )        Reserve n bytes at HERE. Bounds-checked like `,`.
-# HERE may end up unaligned: `,`, `:` and `create` round it up themselves, but
-# a cell laid down by the compiler inside a definition does not, so write
-# align  after `[ n allot ]` in a colon definition.
+# HERE may end up unaligned: `,`, `:` and `create` round it up themselves.
+# Inside a colon definition (`[ n allot ]`) the bytes become part of the
+# thread. They need a word in front of them that steps IP over them, as
+# litstring does, and  align  before `]`. Without the align the next cell
+# compiled is an error (see comma in 05-internal-functions.s); without the
+# word in front the inner interpreter runs the bytes as if they were words.
 defcode "allot",5,,ALLOT
     checkunderflow 0
     POP t1
@@ -516,21 +519,13 @@ defcode "allot",5,,ALLOT
     sw a4, 0(t2)
     NEXT
 
-# , ( x -- )            Append a cell to the dictionary at HERE. An unaligned
-# HERE (after `c,` or an odd `allot`) is rounded up first: the store would
-# trap otherwise.
+# , ( x -- )            Append a cell to the dictionary at HERE (comma in
+# 05-internal-functions.s). An unaligned HERE (after `c,` or an odd `allot`)
+# is rounded up first; while a definition is compiled it is an error instead.
 defcode ",",1,,COMMA
     checkunderflow 0    # need 1 item
-    POP t1
-    li t2, var_HERE
-    lw a4, 0(t2)        # current HERE value
-    addi a4, a4, CELL-1 # round it up to a CELL boundary
-    andi a4, a4, -CELL
-    li a5, DICT_TOP     # dictionary bounds check, like COLON's
-    bge a4, a5, err_mem
-    sw t1, 0(a4)        # store the cell
-    addi a4, a4, CELL
-    sw a4, 0(t2)        # advance HERE
+    POP a0
+    call comma          # (clobbers a3, a4, a5)
     NEXT
 
 # c, ( c -- )           Append one byte to the dictionary at HERE. HERE is left
@@ -1176,16 +1171,12 @@ defcode ":",1,,COLON
 
 # ; ( -- )              # End the definition of a new word
 defcode ";",1,F_IMMEDIATE,SEMI
-    # Check for room first and unhide after: abandon_def drops only a hidden
-    # word, so a `;` that finds the dictionary full must leave the unfinished
-    # word (it has no EXIT) hidden.
-    li t0, var_HERE     # copy the memory address of HERE into temporary
-    lw t2, 0(t0)        # load the HERE value into temporary
-
-    # bounds check on the exit memory location
-    li a4, DICT_TOP     # load out of bounds memory address (DICT_TOP)
-    bge t2, a4, err_mem # error if the memory address is out of bounds
-                        # (reset then drops the unfinished word: abandon_def)
+    # The EXIT first, the unhiding after: abandon_def drops only a hidden
+    # word, so a `;` that cannot append its EXIT (the dictionary is full, or
+    # HERE is unaligned) must leave the unfinished word hidden. comma then
+    # ends in the error handler and reset drops the word.
+    la a0, EXIT         # load the codeword address
+    call comma          # append it (clobbers a3, a4, a5)
 
     # unhide the word
     li a1, var_CURRENT  # the word being compiled is the newest of CURRENT
@@ -1194,15 +1185,6 @@ defcode ";",1,F_IMMEDIATE,SEMI
     lbu t1, CELL(a1)    # load the flags+length byte into temporary
     andi t1, t1, ~F_HIDDEN # unhide the word
     sb t1, CELL(a1)     # write the flags+length byte back to memory
-
-    # store codeword into memory
-
-    la t1, EXIT         # load the codeword address into temporary
-    sw t1, 0(t2)        # store the codeword address into HERE
-
-    # move HERE pointer
-    addi t2, t2, CELL   # prepare to move the HERE pointer by 1 CELL
-    sw t2, 0(t0)        # store the new address of HERE into the HERE variable
 
     # update the STATE variable
     li t0, var_STATE    # load the address of the STATE variable into temporary
@@ -1279,15 +1261,11 @@ defcode "'",1,F_IMMEDIATE,TICK
     li t1, var_STATE
     lw t1, 0(t1)
     beqz t1, tick_push
-    la t1, LIT          # compile: LIT codeword cell, then the cfa cell
-    li t2, var_HERE
-    lw a4, 0(t2)
-    li a5, DICT_TOP-CELL # need room for two cells
-    bge a4, a5, err_mem
-    sw t1, 0(a4)
-    sw a0, CELL(a4)
-    addi a4, a4, 2*CELL
-    sw a4, 0(t2)        # advance HERE
+    mv a1, a0           # compile: keep the cfa (comma leaves a1 alone)
+    la a0, LIT
+    call comma          # the LIT codeword cell...
+    mv a0, a1
+    call comma          # ...then the cfa cell
     NEXT
 tick_push:
     PUSH a0
