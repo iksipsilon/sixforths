@@ -1171,18 +1171,27 @@ defcode ":",1,,COLON
 
 # ; ( -- )              # End the definition of a new word
 defcode ";",1,F_IMMEDIATE,SEMI
+    # Is a definition open? A word is hidden exactly while it is compiled, so
+    # the newest word of CURRENT says so. With none open (`;` at the prompt,
+    # or after a line of the definition failed) it is an error: nothing may
+    # be appended, and the newest word may be a kernel word, whose header is
+    # in flash and must not be stored into.
+    li a1, var_CURRENT  # the word being compiled is the newest of CURRENT
+    lw a1, 0(a1)        # load the address of the head cell
+    lw a1, 0(a1)        # load the address of the word
+    beqz a1, err_error  # an empty vocabulary: no definition is open
+    lbu t1, CELL(a1)    # load the flags+length byte into temporary
+    andi t2, t1, F_HIDDEN
+    beqz t2, err_error  # not hidden: no definition is open
+
     # The EXIT first, the unhiding after: abandon_def drops only a hidden
     # word, so a `;` that cannot append its EXIT (the dictionary is full, or
     # HERE is unaligned) must leave the unfinished word hidden. comma then
     # ends in the error handler and reset drops the word.
     la a0, EXIT         # load the codeword address
-    call comma          # append it (clobbers a3, a4, a5)
+    call comma          # append it (clobbers a3, a4, a5: a1 and t1 survive)
 
     # unhide the word
-    li a1, var_CURRENT  # the word being compiled is the newest of CURRENT
-    lw a1, 0(a1)        # load the address of the head cell
-    lw a1, 0(a1)        # load the address of the word
-    lbu t1, CELL(a1)    # load the flags+length byte into temporary
     andi t1, t1, ~F_HIDDEN # unhide the word
     sb t1, CELL(a1)     # write the flags+length byte back to memory
 
@@ -1233,10 +1242,14 @@ defcode "create",6,,CREATE
 # The interpreter already honors F_IMMEDIATE in compile mode (that is how ';'
 # works), so setting the flag on the LATEST word is all that is needed.
 # Usage, standard Forth style:  : name ... ; immediate
+# A kernel word cannot be changed: its header is in flash (below RAM_BASE),
+# so with no word in RAM yet, or in an empty vocabulary, it is an error.
 defcode "immediate",9,,IMMEDIATE
     li t1, var_CURRENT
     lw t1, 0(t1)
     lw t1, 0(t1)        # address of the most recent word
+    li t0, RAM_BASE
+    bltu t1, t0, err_error # a word in flash, or none at all (0)
     lbu t2, CELL(t1)    # its flags+length byte
     ori t2, t2, F_IMMEDIATE # set the immediate bit
     sb t2, CELL(t1)
