@@ -50,7 +50,7 @@ What the GD32V tolerated and the QingKe V2 does not:
   The link base is 0 now.
 - One flash wait state at 24 MHz (without it the chip falls into a reset loop), and
   RCC_CFGR0 written wholesale (clearing HPRE alone left the console at half the baud rate
-  on the board). The port's comment, and `old-docs/CH32V006.md`, concluded from this that
+  on the board). The port's comment, and its first write-up, concluded from this that
   the V006 "resets with a /2 divider in some other CFGR0 field". It does not: on
   2026-11-15 CFGR0 was read on the board with the chip halted at reset, and it held 0x20,
   the manual's value (HPRE = SYSCLK / 3, every other field 0). The code that showed the
@@ -95,6 +95,21 @@ The files:
   lines and replayed them at boot. On 2026-11-14 the 160 numbered source lines replaced
   it: the owner found the appending log too complex, and nothing is saved automatically
   any more. `etc/source-lines.md` compares the two.
+
+The port's first write-up was `old-docs/CH32V006.md`. It was removed on 2026-11-15
+together with FiveForths' own manuals in `old-docs/` and FiveForths' `README.md`; git has
+them all (`git show 7b119e8:old-docs/CH32V006.md`). Beyond what is listed above, it
+records:
+- The first register mapping was s2 -> s0 (RSP), t3 -> a4, t4 -> a5, t5 -> gp, t6 -> tp,
+  with s3 eliminated by spilling ra to the return stack. That made the return stack
+  pointer something that had to be set before the boot banner.
+- The QingKe V2 masks the low bits of the trap vector base. Before the handler was 1 KiB
+  aligned, every trap went to 0x000 = `_start` and looked like a spontaneous reboot.
+- The port began with FiveForths' 19 primitives and 26 new ones in
+  `src/11-eforth-primitives.s` (`um+` among them), and deleted `djb2.c` and the
+  `make djb2` target along with the hashed headers.
+- A pull request to FiveForths was considered: the branch was clean onto its master
+  `d6432a1`, with the jonesforth headers as the divergence to discuss.
 
 ## The cleanup of 2026-11-15
 

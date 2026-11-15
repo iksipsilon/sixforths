@@ -40,7 +40,8 @@ no session needs to read.
   STRT; reference manual 18.4.5). The emulator faults on PG, on a half-loaded buffer,
   and on programming a page that is not erased.
 - The trap handler (`trap_handler` in `src/03-traps.s`) prints `T<mcause> <mepc>` in hex
-  on the console and hangs. If the board prints that, the code did something illegal at
+  on the console and hangs, with all state intact for gdb (`minichlink -G` and
+  `gdb-multiarch`). If the board prints that, the code did something illegal at
   that address. Traps use a vector table at 0x0 (`_start` in `sixforths.s`, `mtvec` = 3;
   the V2 needs the table 1 KiB aligned, and 0x0 is): entry 0 = reset jump, 2 = NMI,
   3 = every exception, 12 = the SysTick tick (`tick_isr`). Entries 0-12 exist; enabling
@@ -265,7 +266,8 @@ automatically (add its `.include` to `sixforths.s`). Ubuntu package:
 Hardware (the board is plugged in through a WCH-LinkE, attached to WSL2 with usbipd-win):
 
     minichlink -w sixforths.bin flash -b    # program the chip and reboot
-    minichlink -r <file> 0x08000000 0xF800  # read the whole flash back (read only)
+    minichlink -r <file> 0x08000000 0xF800  # read the whole flash back (read only), and then
+    minichlink -b                           # restart the chip: -r leaves the core halted
     picocom -b 115200 --imap lfcrlf --omap crlf --send-cmd "ascii-xfr -sv -l 100" /dev/ttyACM0
                                             # talk to the REPL (Ctrl-A Ctrl-X to quit)
 
@@ -283,6 +285,8 @@ What minichlink does, as seen on the board:
   not assume the flash after the kernel is erased.
 - Flashing prints one stray byte before the banner; a plain `minichlink -b` reset does
   not.
+- `minichlink -r` halts the core and does not resume it. Always follow it with
+  `minichlink -b`.
 - It sometimes prints `link error, nothing connected to linker` five times when it
   connects, then recovers and works; cause unknown.
 - A register's value at reset can be read without touching flash:
@@ -341,8 +345,8 @@ Layout:
 - `docs/` holds reference PDFs (CH32V00xRM register manual, CH32V006 datasheet, pinout, the
   A7670X HAT schematic, Moving Forth parts 1-8). Read only the pages you need;
   `pdftotext -layout` into the scratchpad makes the manual searchable.
-  `docs/docs-from-claude/` holds files handed over from chat. `old-docs/` and `README.md`
-  are FiveForths' own documentation and do not describe sixforths. None of these is source.
+  `docs/docs-from-claude/` holds files handed over from chat. Neither is source.
+- There is no README: this file is the description of the project.
 
 ## How to work here
 
@@ -392,6 +396,9 @@ few pins: count them before promising one.
 | PD6 | 20 | USART1 RX, the console |
 
 Planned for the LED rows (step 5b): PC0, PC2, PA1, PA2.
+
+The WCH-LinkE is wired to the board like this: SWDIO to PD1, 3V3 and GND; the LinkE's
+RX to PD5 (the console's TX), the LinkE's TX to PD6 (the console's RX).
 
 ## The board now
 
