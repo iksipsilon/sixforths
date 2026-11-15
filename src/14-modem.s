@@ -1,5 +1,5 @@
 ##
-# Modem: USART2, received through DMA into a ring (CH32V006 PORT)
+# Modem: USART2, received through DMA into a ring
 #
 # USART2 runs on PD2 (TX, QFN pin 16) / PD3 (RX, pin 17) at MODEM_BAUD. DMA1
 # channel 7 copies every byte it receives into MRING (01-variables-

@@ -1,5 +1,5 @@
 ##
-# Time: ticks and ms (CH32V006 PORT)
+# Time: ticks and ms
 #
 # SysTick (registers in mcu.s, reference manual 6.5.4) runs free on HCLK/8 =
 # 3 MHz: STK_TICKS_PER_MS = 3000 ticks per millisecond, and the 32-bit count
@@ -80,11 +80,11 @@ defcode "ticks",5,,TICKS
     PUSH a2
     NEXT
 
-# ms ( n -- )           Wait n milliseconds, polling SysTick. CH32V006 PORT:
-# n is signed (Forth-2012 says u): n <= 0 returns at once, so a stray -1
-# cannot hang the phone for 49 days. Each millisecond begins exactly
-# STK_TICKS_PER_MS ticks after the one before, so a long wait does not drift,
-# and n * 3000 never has to fit in a cell.
+# ms ( n -- )           Wait n milliseconds, polling SysTick. n is signed
+# (Forth-2012 says u): n <= 0 returns at once, so a stray -1 cannot hang the
+# phone for 49 days. Each millisecond begins exactly STK_TICKS_PER_MS ticks
+# after the one before, so a long wait does not drift, and n * 3000 never has
+# to fit in a cell.
 defcode "ms",2,,MS
     checkunderflow 0
     POP a1                      # a1 = milliseconds still to wait

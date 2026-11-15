@@ -1,6 +1,5 @@
 ##
 # Flash: the FPEC routines, the source lines and the user flash page words
-# (CH32V006 PORT)
 #
 # Source lines: LINES_BASE..LINES_TOP holds 160 slots of 64 bytes. A slot is
 # the text of one line (up to 63 characters), a newline, then unused bytes

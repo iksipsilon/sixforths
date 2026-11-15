@@ -1,12 +1,11 @@
 ##
 # Forth primitives: every word written in machine code
 #
-# CH32V006 PORT: one file, sorted by what the words do (inner interpreter,
-# data stack, return stack, memory, arithmetic, logic, comparison, strings and
-# parsing, compiler and dictionary, input and output, system). It merges
-# upstream's 08-forth-primitives.s with the port's eForth-style and ANS-style
-# additions. The dictionary is chained in file order and searched from the
-# end, so a word near the end of this file is found fastest. The words for the lines in
+# One file, sorted by what the words do (inner interpreter, data stack,
+# return stack, memory, arithmetic, logic, comparison, strings and parsing,
+# compiler and dictionary, vocabularies, input and output, system). The
+# dictionary is chained in file order and searched from the end, so a word
+# near the end of this file is found fastest. The words for the lines in
 # flash (line p load wipe) live with their machinery in 12-flash.s.
 #
 # Registers: s0 = DSP (data stack), tp = RSP (return stack), s1 = IP,
@@ -94,9 +93,9 @@ defcode "exit",4,,EXIT
     POPRSP s1           # pop RSP into IP
     NEXT
 
-# execute ( cfa -- )    Execute the word whose code field address is on the stack
-# CH32V006 PORT: takes a code field address now, which is what ' produces and
-# what compiled cells contain. To execute the latest word: latest @ >cfa execute
+# execute ( cfa -- )    Execute the word whose code field address is on the
+# stack: that is what ' produces and what compiled cells contain. To execute
+# the latest word: latest @ >cfa execute
 defcode "execute",7,,EXECUTE
     checkunderflow 0    # need 1 item
     POP a0              # a0 = codeword address (docol relies on W = codeword)
@@ -317,9 +316,9 @@ defcode "sp@",3,,DSPFETCH
     PUSH t1             # store DSP in the top of the stack
     NEXT
 
-# sp! ( a -- )          Set the data stack pointer. CH32V006 PORT: a must be
-# CELL-aligned and inside the data stack (r0 ... s0), else it is an error:
-# an unaligned pointer would trap at the next push.
+# sp! ( a -- )          Set the data stack pointer. a must be CELL-aligned
+# and inside the data stack (r0 ... s0), else it is an error: an unaligned
+# pointer would trap at the next push.
 defcode "sp!",3,,DSPSTORE
     checkunderflow 0    # need 1 item
     POP a1
@@ -333,7 +332,6 @@ defcode "sp!",3,,DSPSTORE
     NEXT
 
 # s0 ( -- a )           Address just above the data stack's first cell
-# depth is then:  : depth s0 sp@ - 2/ 2/ 1- ;
 defcode "s0",2,,SZERO
     li t1, DSP_TOP
     PUSH t1
@@ -377,8 +375,8 @@ defcode "rp@",3,,RSPFETCH
     PUSH tp             # store RSP in the top of the stack
     NEXT
 
-# rp! ( a -- )          Set the return stack pointer. CH32V006 PORT: a must be
-# CELL-aligned and inside the return stack (up to r0), else it is an error.
+# rp! ( a -- )          Set the return stack pointer. a must be CELL-aligned
+# and inside the return stack (up to r0), else it is an error.
 defcode "rp!",3,,RSPSTORE
     checkunderflow 0    # need 1 item
     POP a1
@@ -1169,12 +1167,10 @@ defcode ":",1,,COLON
     li t0, F_LENMASK    # load max token size (31: 5 length bits) in temporary
     bgtu a1, t0, err_token # error if token size is greater than 31
 
-    # CH32V006 PORT: a jonesforth-style header instead of a hashed one: link
-    # cell, flags+length byte (HIDDEN while compiling), the name, zero padding
-    # to the next CELL boundary, then the code field: docol, the same value a
-    # defword header holds (upstream pointed it at a `j docol` stub, one
-    # extra jump for every call of a colon word). make_header builds it, as
-    # for create, and checks that it fits.
+    # A jonesforth-style header: link cell, flags+length byte (HIDDEN while
+    # compiling), the name, zero padding to the next CELL boundary, then the
+    # code field: docol, the same value a defword header holds. make_header
+    # builds it, as for create, and checks that it fits.
     la a2, docol
     li a3, F_HIDDEN
     call make_header
@@ -1187,10 +1183,9 @@ defcode ":",1,,COLON
 
 # ; ( -- )              # End the definition of a new word
 defcode ";",1,F_IMMEDIATE,SEMI
-    # CH32V006 PORT BUGFIX: check for room first and unhide after. The word
-    # used to be unhidden first, so a `;` that found the dictionary full left
-    # the unfinished word (with no EXIT) defined: abandon_def drops only a
-    # hidden word.
+    # Check for room first and unhide after: abandon_def drops only a hidden
+    # word, so a `;` that finds the dictionary full must leave the unfinished
+    # word (it has no EXIT) hidden.
     li t0, var_HERE     # copy the memory address of HERE into temporary
     lw t2, 0(t0)        # load the HERE value into temporary
 
@@ -1276,13 +1271,11 @@ defcode "immediate",9,,IMMEDIATE
 # dictionary. State-smart (and itself IMMEDIATE):
 #   executing:  push the word's code field address
 #   compiling:  compile it as a literal (LIT + cfa)
-# CH32V006 PORT: with jonesforth-style headers ' returns the code field
-# address directly (the thing compiled cells contain and execute consumes),
-# so user code never does header arithmetic. Control flow in Forth is now:
-#   : begin here @ ; immediate
+# The code field address is what compiled cells contain and what execute
+# consumes, so user code never does header arithmetic:
 #   : until ' 0branch , , ; immediate
 defcode "'",1,F_IMMEDIATE,TICK
-    # parse the next token, mirroring process_token's use of TOIN
+    # parse the next token
     call token                  # a0 = token start, a1 = token length; TOIN moves past it
     beqz a1, err_error  # ' with nothing after it
     call lookup         # by name: a0 = token address, a1 = length; returns
@@ -1490,8 +1483,8 @@ forget_here:
 # Input and output
 ##
 
-# CH32V006 PORT: key key? emit space cr type words use the I/O vectors
-# (var_IN, var_OUT), set by <console <modem >console >modem and by reset.
+# key key? emit space cr type words use the I/O vectors (var_IN, var_OUT),
+# set by <console <modem >console >modem and by reset.
 
 # key ( -- x )          The next character from the input source (<console,
 # <modem). The modem gives -1 if nothing came within mtimeout ms.
