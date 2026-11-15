@@ -266,6 +266,15 @@ t("abort", "5 abort 66 emit", "  ?", absent=("B",))
 e, out, _ = h.session(P, "1 2 : q quit ; q 65 emit\n66 emit\n. .\n")
 check("quit (drops rest of line, keeps stack)", e, out, ["B", "2 1 "], absent=("A",))
 
+# ---- the input line: 254 characters at most, so the TIB's last byte stays 0 and token stops there ----
+e = copy.deepcopy(P)
+e.ram[h.SYM["TIB_TOP"] - 0x20000000] = 0x41     # a nonzero byte just above the TIB (the return stack's lowest cell)
+out, _ = h.feed(e, "65 emit".ljust(254) + "\n")
+check("a line of 254 characters is interpreted", e, out, ["\nA   ok"], absent=("?",))
+out, _ = h.feed(e, "65 emit".ljust(255) + "\n66 emit\n")
+check("a line of 255 characters: tib full, nothing above the TIB is read, the next line works", e, out,
+      ["? tib full", "\nB"], absent=("\nA",))
+
 # ---- key? ----
 e, out, _ = h.session(P, "key? .\n")
 check("key? empty", e, out, ["0 "])

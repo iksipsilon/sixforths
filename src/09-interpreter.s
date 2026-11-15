@@ -50,8 +50,10 @@ skip_send:
     li t0, CHAR_COMMENT_OPARENS                 # load opening parens into temporary
     beq a0, t0, skip_oparens                    # skip the opening parens if it matches
 
-    # add the character to the TIB
-    li a5, TIB_TOP                              # load TIB_TOP memory address
+    # add the character to the TIB. Its last byte is never written: it stays
+    # 0 (tib_init), the end mark `token` stops at. So a line holds at most
+    # TIB_SIZE-2 characters and the newline.
+    li a5, TIB_TOP-1                            # load the address of the TIB's last byte
     bge a1, a5, err_tib                         # error if the terminal input buffer is full
     sb a0, 0(a1)                                # store the character from W register in the TIB
     addi a1, a1, 1                              # increment TOIN value by 1
