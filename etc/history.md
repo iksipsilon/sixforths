@@ -137,6 +137,29 @@ records:
   `emulators/test.py` (a test for a jonesforth port, booting a `jonesforth.bin` this
   repository never had); `emulators/test_fotrh.py` became `emulators/test_sixforths.py`.
 
+## `? big token` on the first line, and the board tests of 2026-11-15
+
+- The first line the board got after a power-up could come back as `? big token`, and
+  the same line then worked; never after a reset. Cause: while the WCH-LinkE powers up
+  with the board, its TX does not drive PD6 for some milliseconds, and the floating PD6
+  heard PD5 on the neighbouring wire (the board's own banner, then the REPL's echo of
+  it): a run of 's' sat in the TIB until the first newline. Before the fix 4 of 4
+  power-ups left 1-66 's' in the TIB; with the LinkE's TX jumper off, a reset echoed
+  135-180 's'. `e4e4587` gives PD6 its pull-up in `gpio_init` (13,544 bytes); after it
+  3 of 3 power-ups left the TIB empty, and with the jumper off a reset echoed nothing.
+  The emulator models it (`linke_starting` in `rv32emu.py`). Until then a script sent a
+  throwaway line first.
+- The same session found that only the first minichlink connection after a power-up
+  reliably leaves the chip running (later ones reset it), so the TIB could be read only
+  once per power-up.
+- `e4e4587` was then tested on the board with scripts built on `etc/board.py`: the seven
+  kernel changes since `9f1401a`, everything checked on `9f1401a` again (every routine
+  had moved once code was no longer padded to 4-byte boundaries), `fpage-prog` and its
+  refusals for the first time, and PD4 held at reset with a jumper to 3V3. All passed.
+  Measured: `fpage-prog` 2.04 ms, `fpage-erase` 3.02 ms, `wipe` 116.9 ms. The test run
+  printed `word count: 185`: it counted the prompt's `ok`, which follows the last name
+  on the same line. There are 184 words.
+
 ## From the old CLAUDE.md, word for word
 
 The three parts below are the text of `CLAUDE.md` as it stood on 2026-11-15 before it

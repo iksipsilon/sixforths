@@ -40,13 +40,14 @@ no session needs to read.
   STRT; reference manual 18.4.5). The emulator faults on PG, on a half-loaded buffer,
   and on programming a page that is not erased.
 - The trap handler (`trap_handler` in `src/03-traps.s`) prints `T<mcause> <mepc>` in hex
-  on the console and hangs, with all state intact for gdb (`minichlink -G` and
-  `gdb-multiarch`). If the board prints that, the code did something illegal at
-  that address. Traps use a vector table at 0x0 (`_start` in `sixforths.s`, `mtvec` = 3;
-  the V2 needs the table 1 KiB aligned, and 0x0 is): entry 0 = reset jump, 2 = NMI,
-  3 = every exception, 12 = the SysTick tick (`tick_isr`). Entries 0-12 exist; enabling
-  another interrupt needs the table extended to its number. **Never tell reset from a
-  trap by `mcause`: on silicon it is not 0 after reset** (the board read 0x800000D9).
+  on the console and hangs with all state intact, but a debugger usually resets the chip
+  when it connects (see "What minichlink does"). If the board prints that, the code did
+  something illegal at that address. Traps use a vector table at 0x0 (`_start` in
+  `sixforths.s`, `mtvec` = 3; the V2 needs the table 1 KiB aligned, and 0x0 is): entry 0
+  = reset jump, 2 = NMI, 3 = every exception, 12 = the SysTick tick (`tick_isr`). Entries
+  0-12 exist; enabling another interrupt needs the table extended to its number. **Never
+  tell reset from a trap by `mcause`: on silicon it is not 0 after reset** (the board
+  read 0x800000D9).
 - Holding **PD4 high at reset keeps line 0 from loading** (see "Source lines in flash"
   below). This is the recovery switch if a bad line 0 stops the board booting. On the
   owner's WeAct board PD4 follows PD5 (the console's TX) through the USB D- line (the
@@ -122,13 +123,14 @@ no session needs to read.
 
 - Flash 0x00000000: kernel + `.rodata`, **must stay under 16 KiB** (`FLASH` `LENGTH` in
   `linker.ld` at the repo root; confirm it says 16k).
-  Currently 13,536 bytes (184 words). Report the size after every change.
+  Currently 13,544 bytes (184 words). Report the size after every change.
 - Flash 0x08004000-0x08006800 (`LINES_BASE`..`LINES_TOP`, 10 KiB): 160 source lines of
   64 bytes (see "Source lines in flash").
 - Flash 0x08006800-0x0800F800 (`USER_FLASH`..`FLASH_TOP`, 36 KiB): the application's own
   data, written a 256-byte page at a time with `fpage-erase ( page -- )` and
   `fpage-prog ( src page -- )`. Both words refuse any other address, so they cannot damage
-  the kernel or the source lines. Planned use: the call log in the top 4 KiB
+  the kernel or the source lines. On the board an erase takes 3.02 ms and a program
+  2.04 ms. Planned use: the call log in the top 4 KiB
   (0x0800E800-0x0800F7FF, see `etc/answers.md`). The phonebook and the SMS stay on the SIM
   for now; they may move to the user flash or the SD card later, depending on how much the
   SIM holds (not known yet, see `etc/answers.md` section 9).
@@ -192,7 +194,7 @@ that was never written is all 0xFF and counts as an empty line.
   lines are read once the current input line is finished, so **`load` goes last on its
   line**; a `load` in a loaded line replaces the range and does not come back. An error
   in a loaded line abandons the rest.
-- `n line` gives the slot's address. `wipe` erases all 160 lines.
+- `n line` gives the slot's address. `wipe` erases all 160 lines (117 ms on the board).
 - **Line 0 is interpreted at boot** unless PD4 is held. It usually holds a `load`.
 - Comments never reach a line (the REPL swallows them first). The master copy of the
   source is a file on the PC; `grep -v -e '^\\' -e '^ *$' file.f | awk '{ print NR+3, "p", $0 }'`
@@ -233,7 +235,8 @@ Modem (`src/13-modem.s`):
   about 3 ms), so the call log may be written while the modem talks. Measured on the
   board with USART1 RX through DMA channel 5, the same controller: 2,048 streamed bytes
   while 16 pages were erased, 543 of them during the 46.8 ms of erasing (2.92 ms a page),
-  no overrun, none wrong; SysTick kept counting. Page programming (FTPG) was not measured.
+  no overrun, none wrong; SysTick kept counting. Page programming (FTPG) stalls the core
+  for 2.04 ms; whether the DMA keeps storing bytes meanwhile was not measured.
 - So far the modem words have only talked to themselves, through a wire from D2 to D3.
   Before connecting the A7670E, read the HAT schematic in `docs/A7670X` for its UART
   voltage.
@@ -268,6 +271,7 @@ Hardware (the board is plugged in through a WCH-LinkE, attached to WSL2 with usb
     minichlink -w sixforths.bin flash -b    # program the chip and reboot
     minichlink -r <file> 0x08000000 0xF800  # read the whole flash back (read only), and then
     minichlink -b                           # restart the chip: -r leaves the core halted
+    minichlink -e                           # or resume the halted core without a reset
     picocom -b 115200 --imap lfcrlf --omap crlf --send-cmd "ascii-xfr -sv -l 100" /dev/ttyACM0
                                             # talk to the REPL (Ctrl-A Ctrl-X to quit)
 
@@ -288,9 +292,17 @@ What minichlink does, as seen on the board:
 - Flashing prints one stray byte before the banner; a plain `minichlink -b` reset does
   not.
 - `minichlink -r` halts the core and does not resume it. Always follow it with
-  `minichlink -b`.
-- It sometimes prints `link error, nothing connected to linker` five times when it
-  connects, then recovers and works; cause unknown.
+  `minichlink -b` (or `minichlink -e`).
+- **Only the first connection after a power-up reliably leaves the chip running.** Later
+  connections usually print `link error, nothing connected to linker` five times
+  ("Trying to put processor in hold and retrying"), then work, and the chip has been
+  reset (`irqs` starts again from 0); once a reset followed a connection without that
+  message. So RAM is only trustworthy in the first read after a power-up. gdb through
+  `minichlink -G` also reset the chip, and could not detach (T05).
+- `minichlink -e` resumes a halted core without a reset, when it does not hit the link
+  error.
+- To stop a hung minichlink or picocom, kill it by PID: `pkill -f <pattern>` also kills
+  the shell that runs it, whose command line contains the pattern.
 - A register's value at reset can be read without touching flash:
   `minichlink -a -r <file> 0x40021000 0x28` resets the chip, halts it before its first
   instruction and reads memory (here the ten RCC registers); `minichlink -b` then
@@ -395,7 +407,7 @@ few pins: count them before promising one.
 | PD3 | 17 | USART2 RX, from the modem's TX (pull-up). On the WeAct board it is also joined to the USB-C D+ line (33 Ω, SB2 in the schematic): keep the board's USB-C socket unplugged |
 | PD4 | 18 | skip button (high at reset: line 0 is not loaded); follows PD5 through the USB D- line on the WeAct board |
 | PD5 | 19 | USART1 TX, the console |
-| PD6 | 20 | USART1 RX, the console |
+| PD6 | 20 | USART1 RX, the console (pull-up: while the WCH-LinkE powers up, its TX does not drive PD6, and a floating PD6 picks up PD5 next to it) |
 
 Planned for the LED rows (step 5b): PC0, PC2, PA1, PA2.
 
@@ -404,29 +416,38 @@ RX to PD5 (the console's TX), the LinkE's TX to PD6 (the console's RX).
 
 ## The board now
 
-- It runs commit `9f1401a` (13,580 bytes). **The repo is ahead of it**: 13,536 bytes,
-  with seven kernel changes that have only run in the emulator (`reset` no longer clears
-  a0-a3 or loads s1; no jump in front of `execute`; a line cannot fill the TIB's last
-  byte; backspace clears the erased character in the TIB; `token` finds the start of a
-  token that a 0 ends; routines are no longer padded to 4-byte boundaries). Flashing
-  needs the owner's go-ahead (rule 3).
-- Its source lines and its user flash are empty. A wire joins D2 and D3 (the USART2
-  loopback; D2 is driven as an output at every boot) and the board's USB-C socket is
-  unplugged. Nothing else is connected.
+- It runs commit `e4e4587` (13,544 bytes), the kernel in the repo.
+- Its source lines and its user flash are empty (all 0xFF, read back). A wire joins D2
+  and D3 (the USART2 loopback; D2 is driven as an output at every boot) and the board's
+  USB-C socket is unplugged. Nothing else is connected.
 - Before trusting any of this after a pause: `make`, run the tests, and read the board's
   flash back to see what it really holds.
-- Checked on the board: boot; an error with 3 cells on the stack and one inside a
-  definition (both leave `depth` 0); `3 allot nosuchword`, `0 rp! nosuchword` and a wrong
-  `sp!` / `rp!` (each prints `?`, not a trap line); 64 cells fit and the 65th overflows;
-  `/mod` `/` `mod`; a vocabulary; `ticks` and `ms`; the tick (a 40-cell stack survives
-  1000 ms of it); `memit` and `mkey` (300 bytes round the ring, the 1000 ms timeout) and
-  the vectors `>modem` `<modem` through the D2-D3 wire; `fpage-erase`; the source lines
-  (`p` `list` `load`, one line changed with its page neighbours intact, `160 p` prints
-  `?`, line 0 after `reboot` and after a hardware reset, a bad line 0 gives `?` and then
-  the prompt, `wipe`); `reboot`.
-- Not checked on the board yet: holding PD4 at reset so that line 0 does not load (it
-  needs a hand on the button); `fpage-prog`; the A7670E itself; the seven kernel changes
-  since `9f1401a`.
+- Checked on the board, all on `e4e4587`:
+  - Boot, and the first line after a power-up (3 of 3 power-ups left the TIB empty).
+  - Errors: one with 3 cells on the stack and one inside a definition (both leave
+    `depth` 0, and the half-made word is gone); `3 allot nosuchword`,
+    `0 rp! nosuchword` and wrong `sp!` / `rp!` (each prints `?`, not a trap line).
+  - The input line: 254 characters run, 255 give `? tib full` and the next line
+    works; BS and DEL leave nothing of the erased characters in the TIB; `parse-name`
+    on a token that a 0 ends.
+  - `execute`; 64 cells fit and the 65th overflows; `/mod` `/` `mod` (with the limits
+    and division by zero), `um/mod` `um*`; vocabularies; `words` (184 names).
+  - `ticks` and `ms`; the tick (500 in 1000 ms, a 40-cell stack survives 1000 ms of
+    it, it runs after an error and after `reboot`).
+  - `memit` and `mkey` through the D2-D3 wire (300 bytes round the ring, a 300-byte
+    burst leaves 44, the 1000 ms timeout) and the vectors `>modem` `<modem`, put back
+    by an error.
+  - The source lines: `p` `list` `load`, one line changed with its page neighbours
+    intact, 63 characters fit, 64 characters and lines 160 and -1 print `?` and write
+    nothing, `n p` alone, line 0 after `reboot` and after a hardware reset, a bad line 0
+    gives `?` and then the prompt, `wipe`. A jumper from D4 to 3V3 at reset skips
+    line 0.
+  - `fpage-erase` (any address in the page) and `fpage-prog`, and their refusals: a page
+    that is not erased, an unaligned source, the source lines. `reboot`.
+- Not checked on the board yet: the A7670E itself; whether the DMA keeps storing bytes
+  while `fpage-prog` runs; `fpage-erase` / `fpage-prog` refusing the kernel and
+  addresses beyond the flash (the emulator tests these; on the board a failure would
+  erase the kernel).
 
 ## Open work
 
@@ -490,16 +511,6 @@ The steps:
 8. **Call log** in the user flash, 16-byte records (format in `etc/answers.md`).
 
 Also open:
-- **`? big token` on the first line.** The first line the board gets after its first
-  startup can come back as `? big token`; the same line then works. The owner has seen
-  it at the first startup, and it happened on 2026-11-15 to the first line `etc/board.py`
-  sent after the board had been idle since it was plugged in. It does not happen after a
-  reset. Not investigated. A guess: junk characters reach the console's RX while the
-  WCH-LinkE starts up, and sit in the TIB until the first newline, so the first token is
-  longer than 31 characters. To see them before a typed line clears the evidence, read
-  the TIB through the debugger right after such a startup:
-  `minichlink -r <file> 0x20001D00 0x100`, then `minichlink -b`. Until this is
-  understood, a script should send a throwaway line first and ignore its answer.
 - A pyserial backend for `emulators/test_sixforths.py`, so the same tests run against the real
   board (and against the emulator through a fake port).
 - Optional: `?do`.

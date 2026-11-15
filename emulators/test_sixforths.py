@@ -605,7 +605,7 @@ tm(">modem emit, <modem key: round trip over the wire", ">modem 72 emit >console
 
 # ---- words ----
 e, out, _ = h.session(P, "words\n")
-names = out.split("\n")[1].split()                # line 0 is the echoed input
+names = out.split("\n")[1].removesuffix("   ok").split()  # line 0 is the echoed input; the prompt follows the last name
 print("word count:", len(names))
 check("words lists new primitives", e, out, ["um/mod", "xdoes", "find-name", "parse", "um*", "quit"])
 check("words lists the modem words, then ms and ticks", e, out, ["\n <modem >modem mtimeout memit mkey mkey? ms ticks irqs fpage-prog fpage-erase wipe load p line "])
