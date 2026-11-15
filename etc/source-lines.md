@@ -5,7 +5,7 @@ what the storage is, how to use it, what happens in flash and in RAM for every o
 why it is built this way, and how it compares with the blocks of classical Forth and with
 the source-replay log it replaced.
 
-The code is in `src/12-flash.s` (the words `line` `p` `load` `wipe`), `src/10-forth-words.s`
+The code is in `src/11-flash.s` (the words `line` `p` `load` `wipe`), `src/10-forth-words.s`
 (`list`), `src/04-io-helpers.s` (`uart_get`, the reader) and `src/06-initialization.s`
 (boot and `reset`).
 

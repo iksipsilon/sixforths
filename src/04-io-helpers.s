@@ -4,7 +4,7 @@
 
 uart_get:
     # The input source switch for the lines in flash (see load in
-    # 12-flash.s). While var_SRC is nonzero it points into the lines, and
+    # 11-flash.s). While var_SRC is nonzero it points into the lines, and
     # bytes come from there instead of the USART; the interpreter cannot tell
     # the difference (loaded lines even echo, so the transcript shows exactly
     # what was loaded). A 0xFF byte is nothing: the unused rest of a slot and

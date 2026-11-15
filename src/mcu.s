@@ -74,7 +74,7 @@
 .equ SKIP_BIT, (1 << 4)         # PD4
 
 ##
-# SysTick (STK), for ticks and ms (13-ticks.s)
+# SysTick (STK), for ticks and ms (12-ticks.s)
 # Reference manual V1.5, 6.5.4 "STK Register Description" (Table 6-5), and
 # QingKe V2 processor manual V1.3, chapter 4: a 32-bit up-counter in the
 # core, clocked by HCLK or HCLK/8. All four registers reset to 0.
@@ -90,7 +90,7 @@
 .equ STK_CTLR_STRE, (1 << 3)    # 1: restart from 0 at the compare value, 0: keep counting up
 .equ STK_TICKS_PER_MS, CPU_FREQ / 8 / 1000   # HCLK/8 = 3 MHz: 3000 ticks per ms
 
-# The tick interrupt (13-ticks.s), SysTick's compare match
+# The tick interrupt (12-ticks.s), SysTick's compare match
 .equ IRQ_SYSTICK, 12            # RM 6.2: interrupt 12, vector table entry 12 (address 0x30)
 .equ PFIC_IENR0, 0xE000E100     # processor manual 3.1, Table 3-2: interrupt enable set,
                                 # bit n lets interrupt n through (write 1, write-only)
@@ -100,7 +100,7 @@
 .equ TICK_MARGIN, 100           # ticks (33 us): how far ahead of the count a new compare must be
 
 ##
-# Modem UART, for 14-modem.s: USART2 on PD2 (TX) / PD3 (RX),
+# Modem UART, for 13-modem.s: USART2 on PD2 (TX) / PD3 (RX),
 # its receiver emptied by DMA1 channel 7. Reference manual V1.5 sections given.
 ##
 .equ RCC_BASE, 0x40021000

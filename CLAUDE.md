@@ -216,7 +216,7 @@ defines lives in RAM, so a reset loses it; lines put with `p` stay in flash.
 
 Layout:
 - `sixforths.s` (repo root) is the top-level file. It includes `src/mcu.s`, then
-  `src/01-*.s` ... `src/14-modem.s` **in that order**. The dictionary follows the
+  `src/01-*.s` ... `src/13-modem.s` **in that order**. The dictionary follows the
   include order, and `.equ last_word, link` after the last include marks its end. It is
   searched from the end, so words in later files are found first.
 - `src/mcu.s` holds the chip's constants: `RAM_SIZE`, pin and register equates.
@@ -235,11 +235,11 @@ Layout:
 - Machine code or thread? Byte loops and stack shuffling are shorter and faster in machine
   code (`type`: 32 bytes against 64); words that mostly call other words are shorter and
   safer as threads.
-- `src/12-flash.s` holds the FPEC routines, the source lines (`line` `p` `load` `wipe`;
+- `src/11-flash.s` holds the FPEC routines, the source lines (`line` `p` `load` `wipe`;
   `list` is a thread in `10-forth-words.s`) and the user flash page words.
-- `src/13-ticks.s` holds `ticks` and `ms` (SysTick, polled), the tick interrupt `tick_isr`
+- `src/12-ticks.s` holds `ticks` and `ms` (SysTick, polled), the tick interrupt `tick_isr`
   and `irqs`.
-- `src/14-modem.s` holds the modem UART: USART2 received by DMA into `MRING`, and the
+- `src/13-modem.s` holds the modem UART: USART2 received by DMA into `MRING`, and the
   words `mkey?` `mkey` `memit` `mtimeout` `>modem` `<modem`.
 - `emulators/` holds `rv32emu.py` (the owner's RV32EC emulator: alignment, RV32E register
   use, FPEC sequencing and illegal instructions all fault), `harness.py` (boots
@@ -351,8 +351,8 @@ Rules for all of it:
   there, and say plainly which part can only be checked on the board.
 - Look every register address and bit up in `docs/ch32v006/CH32V00XRM.PDF` (only the pages
   needed) and quote the section in a comment. Do not write a register from memory.
-- A device gets its own numbered file with its machine code and its words (`14-modem.s`,
-  `15-display.s`, ...); pin and register equates go to `mcu.s`. Keep one pin table in this
+- A device gets its own numbered file with its machine code and its words (`13-modem.s`,
+  `14-display.s`, ...); pin and register equates go to `mcu.s`. Keep one pin table in this
   file once pins are assigned (the QFN20 has few: count them before promising one).
 - Interrupts: at most **one**, and it must not nest. Its routine may use `ra`,
   `t0-t2`, `a0-a5` freely (the hardware prologue saves exactly those); to use `s0`, `s1`,

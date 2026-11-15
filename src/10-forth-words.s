@@ -247,7 +247,7 @@ defword "dump",4,,DUMP
 3:  .int DROP, EXIT
 
 ##
-# Source lines (12-flash.s)
+# Source lines (11-flash.s)
 ##
 
 # : list 1+ swap begin 2dup u> while dup . dup line dup 64 10 scan nip dup

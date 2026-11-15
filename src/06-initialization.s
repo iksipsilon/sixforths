@@ -16,7 +16,7 @@ boot:
 
     call interrupt_init # the trap vector, interrupts off (03-interrupts.s)
     call uart_init      # the clock and the console UART (mcu.s)
-    call ticks_init     # start SysTick for ticks and ms (13-ticks.s)
+    call ticks_init     # start SysTick for ticks and ms (12-ticks.s)
     call gpio_init      # the console pins (mcu.s); a0 = skip button
 
     # Line 0 is interpreted first, unless the skip button (PD4 high) is held.
@@ -32,7 +32,7 @@ boot:
     sw t1, var_SRCEND-var_SRC(t0) # ...and from that line only
 boot_noload:
 
-    call modem_init     # USART2 + DMA ring for mkey and memit (14-modem.s)
+    call modem_init     # USART2 + DMA ring for mkey and memit (13-modem.s)
 
     # initialize HERE variable
     li t0, RAM_BASE     # load RAM_BASE memory address
@@ -79,7 +79,7 @@ reset_boot:
     li t0, MSP_TOP
     mv sp, t0
     li s0, DSP_TOP              # initialize DSP register
-    # Interrupts on (the tick, 13-ticks.s). At boot this is the first time;
+    # Interrupts on (the tick, 12-ticks.s). At boot this is the first time;
     # after an error they are on already.
     csrs mstatus, 0x08
     la s1, interpreter_start    # initialize IP register

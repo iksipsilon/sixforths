@@ -6,7 +6,7 @@
 # compiler and dictionary, vocabularies, input and output, system). The
 # dictionary is chained in file order and searched from the end, so a word
 # near the end of this file is found fastest. The words for the lines in
-# flash (line p load wipe) live with their machinery in 12-flash.s.
+# flash (line p load wipe) live with their machinery in 11-flash.s.
 #
 # Registers: s0 = DSP (data stack), tp = RSP (return stack), s1 = IP,
 # a0 = W (NEXT hands W to the code-field routine like an argument). sp is the

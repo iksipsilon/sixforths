@@ -35,7 +35,7 @@
 .equ var_CONTEXT, var_HLD - CELL        # 1 CELL: head cell of the vocabulary searched first
 .equ var_CURRENT, var_CONTEXT - CELL    # 1 CELL: head cell of the vocabulary definitions go to
 .equ var_VOCLINK, var_CURRENT - CELL    # 1 CELL: newest vocabulary (its link cell), 0 = none
-# modem receive (14-modem.s)
+# modem receive (13-modem.s)
 .equ var_MRD, var_VOCLINK - CELL        # 1 CELL: offset in MRING of the next byte mkey reads
 .equ var_MTIMEOUT, var_MRD - CELL       # 1 CELL: how many ms mkey waits for a byte (see mtimeout)
 # I/O vectors. var_OUT: the routine emit, type and the words built on them
@@ -46,7 +46,7 @@
 # echo, ok and the error messages do not follow these.
 .equ var_OUT, var_MTIMEOUT - CELL       # 1 CELL: output routine (see >console >modem)
 .equ var_IN, var_OUT - CELL             # 1 CELL: input table (see <console <modem)
-# tick interrupts taken since boot (13-ticks.s, see irqs)
+# tick interrupts taken since boot (12-ticks.s, see irqs)
 .equ var_IRQS, var_IN - CELL            # 1 CELL
 # A new variable goes here, and MSP_TOP below is set to it.
 
@@ -59,7 +59,7 @@
 # Forth's data stack has a register of its own (s0) and no interrupt writes
 # near it. MSTACK_SIZE = one frame (48) + 12 cells for subroutines.
 # One frame is enough: HPE can nest 2 levels (3.4), but nesting is off
-# (INTSYSCR.INESTEN = 0, ticks_init in 13-ticks.s) and the tick is the only
+# (INTSYSCR.INESTEN = 0, ticks_init in 12-ticks.s) and the tick is the only
 # interrupt, so a second interrupt waits for mret. A trap inside tick_isr
 # would stack a second frame, into PAD: harmless, the trap handler never
 # uses sp and hangs.
@@ -78,7 +78,7 @@
 .equ PAGEBUF_SIZE, 256
 .equ PAGEBUF, PAD - PAGEBUF_SIZE
 # The modem receive ring. DMA1 channel 7 writes every byte USART2 receives
-# into it, round and round (14-modem.s). A power of two, so an offset wraps
+# into it, round and round (13-modem.s). A power of two, so an offset wraps
 # with one AND.
 .equ MRING_SIZE, 256
 .equ MRING, PAGEBUF - MRING_SIZE
@@ -104,7 +104,7 @@
 ##
 
 # The kernel occupies the bottom 16 KiB (enforced by linker.ld LENGTH).
-# Above it, 10 KiB of source lines: 160 slots of 64 bytes (12-flash.s). Line 0
+# Above it, 10 KiB of source lines: 160 slots of 64 bytes (11-flash.s). Line 0
 # is interpreted at boot.
 # The regions use the 0x08000000 flash base: the FPEC takes such addresses
 # for program/erase, and the same addresses read back via the flash alias.

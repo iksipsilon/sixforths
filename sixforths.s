@@ -33,13 +33,13 @@
 # t1, t2 = scratch
 # gp = scratch
 # ra belongs to call / ret. An interrupt routine may use ra, t0-t2 and a0-a5:
-# those are what the hardware prologue saves (see 13-ticks.s, tick_isr).
+# those are what the hardware prologue saves (see 12-ticks.s, tick_isr).
 
 # The _start entry label must come first: it is the vector table at 0x0, as
 # in WCH's startup code. Reset always starts at 0x0; mtvec = 0x0 | 3
 # (vectored, entries are addresses) sends an NMI to entry 2 and every
 # exception to entry 3 (EXC). The QingKe V2 needs the table 1 KiB aligned,
-# and 0x0 is. Entries 0-12 exist: 12 is the SysTick tick (13-ticks.s), the
+# and 0x0 is. Entries 0-12 exist: 12 is the SysTick tick (12-ticks.s), the
 # only interrupt; enabling another one needs the table extended to its
 # number. Never tell reset from a trap by mcause: on silicon it is not 0
 # after reset (the board read 0x800000D9).
@@ -53,7 +53,7 @@ _start:
     .word interrupt_handler         # 0x08: vector 2, NMI
     .word interrupt_handler         # 0x0C: vector 3, EXC (all exceptions)
     .word 0, 0, 0, 0, 0, 0, 0, 0    # 0x10-0x2C: vectors 4-11, reserved or not enabled
-    .word tick_isr                  # 0x30: vector 12, SysTick: the tick (13-ticks.s)
+    .word tick_isr                  # 0x30: vector 12, SysTick: the tick (12-ticks.s)
 .option pop
 
 # include the chip's constants (RAM size, registers, pins) from src/mcu.s
@@ -70,9 +70,9 @@ _start:
 .include "08-primitives.s"        # every machine-code word, sorted by function
 .include "09-interpreter.s"
 .include "10-forth-words.s"       # colon words kept in flash as threads
-.include "12-flash.s"             # flash: source lines (line p load wipe) and user pages
-.include "13-ticks.s"             # ticks and ms: the SysTick counter, and the tick interrupt
-.include "14-modem.s"             # mkey? mkey memit mtimeout >modem <modem: USART2 + DMA ring
+.include "11-flash.s"             # flash: source lines (line p load wipe) and user pages
+.include "12-ticks.s"             # ticks and ms: the SysTick counter, and the tick interrupt
+.include "13-modem.s"             # mkey? mkey memit mtimeout >modem <modem: USART2 + DMA ring
 
 # Header of the last word in flash. defcode/defword chain the words in
 # assembly order through `link` (02-macros.s); LATEST starts here.
