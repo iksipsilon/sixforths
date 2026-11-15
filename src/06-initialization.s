@@ -85,12 +85,6 @@ reset_boot:
     la s1, interpreter_start    # initialize IP register
     li tp, RSP_TOP              # initialize RSP register
 
-    # initialize function parameters
-    mv a0, zero         # initialize W register
-    mv a1, zero         # initialize X register
-    mv a2, zero         # initialize Y register
-    mv a3, zero         # initialize Z register
-
     # initialize STATE variable
     li t0, var_STATE    # load STATE variable
     sw zero, 0(t0)      # initialize STATE variable (0 = execute)
