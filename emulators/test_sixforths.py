@@ -61,8 +61,8 @@ for ln in lines:
     if E.fault is not None or steps < 0:
         bad.append((ln, E.fault, steps, out[-120:]))
         break
-    # an error prints "  ?..." on its own line after the echoed input (line 0;
-    # a comment line has no echoed newline, so nothing follows it)
+    # an error prints "  ?..." on its own line after the echoed input (the
+    # first line of the output)
     if any(r.lstrip().startswith("?") for r in out.split("\n")[1:]):
         bad.append((ln, None, steps, out[-120:]))
 if bad:
@@ -283,6 +283,19 @@ check("two characters erased with DEL, then Enter", e, out, [".s\n1 2    ok"], a
 e, out, _ = h.session(P, "1 2 3 4 5\x08\x08\x08\x08\n.s\n")
 check("four characters erased with BS, then Enter", e, out, [".s\n1 2 3    ok"], absent=("?",))
 
+# ---- comments: \ to the end of its line, ( to the next ) or the end of its line ----
+e, out, _ = h.session(P, "65 emit \\ note\n66 emit\n")
+check("a \\ comment ends with its line: what stands before it runs at once", e, out,
+      ["note\nA   ok\n66 emit\nB   ok\n"])
+e, out, _ = h.session(P, "\\ only a comment\n66 emit\n")
+check("a line that is only a \\ comment gets its ok", e, out, ["comment\n   ok\n66 emit\nB   ok\n"])
+e, out, _ = h.session(P, "65 emit ( a b -- c ) 66 emit\n")
+check("a ( comment ) inside a line", e, out, [") 66 emit\nAB   ok\n"])
+e, out, _ = h.session(P, "65 emit ( oops\n66 emit\n")
+check("an unclosed ( ends with its line", e, out, ["oops\nA   ok\n66 emit\nB   ok\n"])
+e, out, _ = h.session(P, ": c1 ( n -- n ) \\ doubles\n2 * ;\n4 c1 .\n")
+check("comments inside a definition over two lines", e, out, ["c1 .\n8 "], absent=("?",))
+
 # ---- key? ----
 e, out, _ = h.session(P, "key? .\n")
 check("key? empty", e, out, ["0 "])
@@ -393,6 +406,10 @@ check("p: line 0 brings them back after a reset", r, out, ["25 "])
 out, _ = h.feed(e, "19 24 list\n")
 check("list: numbers and text, an empty and an erased line", e, out,
       ["list\n19 \r\n20 : sq dup * ;\r\n21 : cube 3 ;\r\n22 \r\n23 65 emit\r\n24 \r\n   ok"])
+x = copy.deepcopy(e)
+out, _ = h.feed(x, "23 p \\ note\n66 emit\n23 23 list\n")
+check("p: a \\ comment is no text (the line is emptied), and the next line is not stored", x, out,
+      ["note\n   ok\n66 emit\nB   ok\n", "list\n23 \r\n"])
 out, _ = h.feed(e, "0 0 list\n159 159 list\n")
 check("list: line 0 and the last line", e, out, ["0 20 21 load\r\n   ok", "159 \r\n   ok"])
 out, _ = h.feed(e, "23 20 list 66 emit\n")

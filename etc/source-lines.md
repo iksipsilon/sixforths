@@ -119,9 +119,9 @@ Ctrl-S). Two things to check before sending:
 
 - No line over 63 characters: `awk 'length($0) > 63' phone.f` must print nothing.
 - No line that *starts* with a backslash is sent with a number in front. `7 p \ a comment`
-  would swallow the newline, and line 7 would receive the *next* line of the file, number
-  and `p` included. That is why the `grep` above removes those lines. Comments in
-  parentheses inside a line are harmless: they are simply left out.
+  is `7 p` alone: it empties line 7 and uses up a line number for nothing. That is why the
+  `grep` above removes those lines. Comments inside a line are harmless, in parentheses or
+  after a backslash at its end: they are simply left out.
 
 How much fits: your old prelude was 58 lines (5 of them over 63 characters, so about 63
 lines here) and compiled to about 2.8 KiB of RAM. The dictionary is 6,296 bytes, so

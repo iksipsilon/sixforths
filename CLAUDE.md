@@ -164,15 +164,15 @@ no session needs to read.
 ## REPL quirks (they affect how tests and prelude files must be written)
 
 - `(` ... `)` and `\` to end of line are swallowed **before** they reach the TIB.
-  Never put them inside names or strings. A trailing `\ comment` merges the next line,
-  so write comments on lines of their own.
+  Never put them inside names or strings. The newline that ends a comment ends the line
+  as usual: what stands before the comment runs, and a line that is only a comment gets
+  its `ok`. A `(` comment also ends at the end of its line, so it cannot span lines.
 - The TIB is 256 bytes and its last byte always stays 0 (the end mark `token` stops at),
   so **a line holds at most 254 characters**; a longer one gets `? tib full`. Keep every
   source line under 250 characters.
 - CR is ignored; ANSI escape sequences are swallowed; BS / DEL erase the last character,
   on the screen and in the TIB. The LF that ends a line is echoed, so its output and `ok`
-  start on the next line (tests expect e.g. `"65 emit\nA"`). A `\` comment swallows its
-  LF without echo (the line merges).
+  start on the next line (tests expect e.g. `"65 emit\nA"`).
 - The interpreter does not read UART while it processes a line (the receiver holds
   only 1-2 bytes). Anything that feeds the board automatically must wait for the echo
   or prompt after each line.
@@ -198,8 +198,8 @@ that was never written is all 0xFF and counts as an empty line.
 - **Line 0 is interpreted at boot** unless PD4 is held. It usually holds a `load`.
 - Comments never reach a line (the REPL swallows them first). The master copy of the
   source is a file on the PC; `grep -v -e '^\\' -e '^ *$' file.f | awk '{ print NR+3, "p", $0 }'`
-  numbers it from line 4. The `grep` matters: `7 p \ comment` would swallow the newline and
-  put the next line of the file, number and `p` included, into line 7.
+  numbers it from line 4. The `grep` matters: `7 p \ comment` is `7 p` alone, which
+  empties line 7 and uses up a line number for nothing.
 - Inside: `uart_get` (`04-io-helpers.s`) takes its bytes from `var_SRC` up to `var_SRCEND`
   while `var_SRC` is not 0, skipping 0xFF; `reset` clears it. `fpage-erase` / `fpage-prog`
   refuse the lines, and `p` refuses everything else.

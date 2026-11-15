@@ -51,6 +51,7 @@ skip_send:
     # add the character to the TIB. Its last byte is never written: it stays
     # 0 (tib_init), the end mark `token` stops at. So a line holds at most
     # TIB_SIZE-2 characters and the newline.
+store_char:
     li a5, TIB_TOP-1                            # load the address of the TIB's last byte
     bge a1, a5, err_tib                         # error if the terminal input buffer is full
     sb a0, 0(a1)                                # store the character from W register in the TIB
@@ -60,12 +61,19 @@ skip_send:
 
     j interpreter                               # return to the interpreter if it's not a newline
 
+# The comments are echoed but never reach the TIB. The newline that ends one
+# does: it ends the line like any other, so what stands before the comment is
+# interpreted now, and a line that is only a comment gets its ok.
 skip_comment:
-    checkchar CHAR_NEWLINE, interpreter         # check if character is a newline
+    checkchar CHAR_NEWLINE, store_char          # check if character is a newline
     j skip_comment                              # loop until it's a newline
 
+# A ( comment ends at ) or at the end of its line, whichever comes first: an
+# unclosed ( must not swallow the lines after it.
 skip_oparens:
     checkchar CHAR_COMMENT_CPARENS, interpreter # check if character is a closing parens
+    li t0, CHAR_NEWLINE
+    beq a0, t0, store_char                      # the end of the line ends it too
     j skip_oparens                              # loop until it's a closing parens
 
 skip_escape:
