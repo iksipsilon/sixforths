@@ -276,7 +276,7 @@ check("key? pending", e, out, ["-1 ", "A"])
 check("mtvec = 3 after boot", B0, f"mtvec={B0.csr.get(0x305)};", ["mtvec=3;"])
 FLASH = open(h.BIN, "rb").read()
 vec = lambda n: int.from_bytes(FLASH[4 * n:4 * n + 4], "little")
-hdl = h.SYM["interrupt_handler"]
+hdl = h.SYM["trap_handler"]
 check("vectors 2 and 3 point to the handler", B0,
       f"nmi={vec(2):#x} exc={vec(3):#x}", [f"nmi={hdl:#x}", f"exc={hdl:#x}"])
 # regression: on silicon mcause is not 0 after reset (the board read 0x800000D9)

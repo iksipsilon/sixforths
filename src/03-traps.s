@@ -1,10 +1,10 @@
 ##
-# Interrupts
+# Traps (the one interrupt, the tick, is in 12-ticks.s)
 ##
 
 .balign CELL
-.global interrupt_handler
-.type interrupt_handler, @function
+.global trap_handler
+.type trap_handler, @function
 # The trap handler: every exception and the NMI come here through the vector
 # table at 0x0 (sixforths.s). The QingKe V2 manual (section 2.2 and the mtvec
 # table) requires a 1 KiB-aligned table, and 0x0 is one; the table holds this
@@ -12,7 +12,7 @@
 # It prints 'T' followed by mcause and mepc in hex on the console (USART1),
 # then hangs with all state intact for the debugger: if a trap fires, the
 # terminal says why and where.
-interrupt_handler:
+trap_handler:
     li t0, UART_BASE_ADDRESS
     li t2, 'T'
 beacon_putc:
@@ -50,8 +50,8 @@ beacon_sep:
 beacon_hang:
     j beacon_hang               # hang; registers/CSRs stay inspectable
 
-# Initialize the interrupt CSRs
-interrupt_init:
+# Initialize the trap and interrupt CSRs: interrupts off, the trap vector set
+trap_init:
     # disable global interrupts
     csrc mstatus, 0x08  # mstatus = 0x300
 

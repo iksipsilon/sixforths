@@ -50,8 +50,8 @@ _start:
 .option norvc                       # entry 0 must be a 4-byte jump, not a 2-byte c.j
     j boot                          # 0x00: reset
     .word 0                         # 0x04: vector 1, reserved
-    .word interrupt_handler         # 0x08: vector 2, NMI
-    .word interrupt_handler         # 0x0C: vector 3, EXC (all exceptions)
+    .word trap_handler              # 0x08: vector 2, NMI
+    .word trap_handler              # 0x0C: vector 3, EXC (all exceptions)
     .word 0, 0, 0, 0, 0, 0, 0, 0    # 0x10-0x2C: vectors 4-11, reserved or not enabled
     .word tick_isr                  # 0x30: vector 12, SysTick: the tick (12-ticks.s)
 .option pop
@@ -62,7 +62,7 @@ _start:
 # include source files from src/
 .include "01-variables-constants.s"
 .include "02-macros.s"
-.include "03-interrupts.s"
+.include "03-traps.s"
 .include "04-io-helpers.s"
 .include "05-internal-functions.s"
 .include "06-initialization.s"

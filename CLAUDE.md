@@ -30,7 +30,7 @@ hardware.
   programs one through the page buffer (BUFRST, 64 x word store + BUFLOAD, FLASH_ADDR,
   STRT; reference manual 18.4.5). The emulator faults on PG, on a half-loaded buffer,
   and on programming a page that is not erased.
-- Trap handler (`src/03-interrupts.s`) prints `T<mcause> <mepc>` in hex over UART and
+- Trap handler (`trap_handler` in `src/03-traps.s`) prints `T<mcause> <mepc>` in hex over UART and
   hangs. Traps use a vector table at 0x0 (`_start` in `sixforths.s`, `mtvec` = 3; the V2
   needs the table 1 KiB aligned): entry 0 = reset jump, 2 = NMI, 3 = every exception,
   12 = the SysTick tick (`tick_isr`). Entries 0-12 exist; enabling another interrupt needs

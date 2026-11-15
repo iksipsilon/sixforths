@@ -14,7 +14,7 @@ boot:
     li t0, MSP_TOP
     mv sp, t0
 
-    call interrupt_init # the trap vector, interrupts off (03-interrupts.s)
+    call trap_init      # the trap vector, interrupts off (03-traps.s)
     call uart_init      # the clock and the console UART (mcu.s)
     call ticks_init     # start SysTick for ticks and ms (12-ticks.s)
     call gpio_init      # the console pins (mcu.s); a0 = skip button
