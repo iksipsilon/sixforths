@@ -61,6 +61,11 @@
 # machine: interrupt frames and the return addresses of nested subroutines.
 # Forth's data stack has a register of its own (s0) and no interrupt writes
 # near it. MSTACK_SIZE = one frame (48) + 12 cells for subroutines.
+# One frame is enough: HPE can nest 2 levels (3.4), but nesting is off
+# (INTSYSCR.INESTEN = 0, ticks_init in 13-ticks.s) and the tick is the only
+# interrupt, so a second interrupt waits for mret. A trap inside tick_isr
+# would stack a second frame, into PAD: harmless, the trap handler never
+# uses sp and hangs.
 .equ MSTACK_SIZE, 96
 .equ MSP_TOP, var_IRQS                  # address of top of machine stack
 .equ MSP_BOTTOM, MSP_TOP - MSTACK_SIZE  # its lowest address
