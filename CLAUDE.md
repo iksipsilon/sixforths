@@ -481,6 +481,16 @@ The steps:
 8. **Call log** in the user flash, 16-byte records (format in `etc/answers.md`).
 
 Also open:
+- **`? big token` on the first line.** The first line the board gets after its first
+  startup can come back as `? big token`; the same line then works. The owner has seen
+  it at the first startup, and it happened on 2026-11-15 to the first line `etc/board.py`
+  sent after the board had been idle since it was plugged in. It does not happen after a
+  reset. Not investigated. A guess: junk characters reach the console's RX while the
+  WCH-LinkE starts up, and sit in the TIB until the first newline, so the first token is
+  longer than 31 characters. To see them before a typed line clears the evidence, read
+  the TIB through the debugger right after such a startup:
+  `minichlink -r <file> 0x20001D00 0x100`, then `minichlink -b`. Until this is
+  understood, a script should send a throwaway line first and ignore its answer.
 - A pyserial backend for `emulators/test_fotrh.py`, so the same tests run against the real
   board (and against the emulator through a fake port).
 - Optional: `?do`.
