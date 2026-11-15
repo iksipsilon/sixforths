@@ -272,7 +272,9 @@ Hardware (the board is plugged in through a WCH-LinkE, attached to WSL2 with usb
                                             # talk to the REPL (Ctrl-A Ctrl-X to quit)
 
 The two maps are needed: the board ends its lines with LF only, and it ignores CR,
-so Enter (CR) must be sent as LF. `make term` runs the same picocom command. To send a
+so Enter (CR) must be sent as LF. `make term` runs the same picocom command, and
+`make flash` the `minichlink -w` line (it programs the `sixforths.bin` that is there; it
+does not build first). To send a
 Forth source file, press Ctrl-A Ctrl-S and give its name: ascii-xfr sends one line, then
 waits 100 ms (the board does not read the UART while it processes a line). What it
 defines lives in RAM, so a reset loses it; lines put with `p` stay in flash.

@@ -49,7 +49,7 @@ readelf: $(PROGNAME).elf
 
 # Flash over SDI with a WCH-LinkE using minichlink
 # (https://github.com/cnlohr/ch32fun); -b reboots the chip after writing
-flash-ch32v006:
+flash:
 		minichlink -w $(FIRMWARE) flash -b
 
 # Serial console via picocom.
