@@ -436,8 +436,13 @@ RX to PD5 (the console's TX), the LinkE's TX to PD6 (the console's RX).
 
 ## The board now
 
-- It runs commit `ba2cb4e` (13,456 bytes). The kernel in the repo (13,464 bytes) adds the
-  check in `xdoes` and is not on the board yet.
+- It runs commit `f91b7cc` (13,464 bytes), the kernel in the repo.
+- Checked on the board on `f91b7cc` (the check in `xdoes`): on the fresh board `xdoes`,
+  `xdoes` in an empty vocabulary and a `does>` word without `create` run in an empty
+  vocabulary each print `?`, and `here` stays at `RAM_BASE`; `does>` (a constant, an
+  array, a word made in a vocabulary), the tick (50 in 100 ms), `reboot`, `words` (184
+  names); the read-back showed the kernel equal to `sixforths.bin`, the lines and the
+  user flash empty.
 - Checked on the board on `ba2cb4e` (the checks in `;` and `immediate`): on the fresh
   board `;`, `immediate`, `] ;` and `;` in an empty vocabulary each print `?`; a `;` with
   no definition open leaves `here` where it was; `: sq dup * ;`, `immediate` on a RAM
