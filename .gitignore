@@ -5,3 +5,4 @@
 *.dump
 __pycache__/
 *.bundle
+docs/output/LED-matrix/KiCad-led5x42/led5x42/.history/

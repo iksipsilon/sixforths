@@ -1,0 +1,3 @@
+(fp_lib_table
+  (lib (name "led5x42")(type "KiCad")(uri "${KIPRJMOD}/led5x42.pretty")(options "")(descr "Project footprints"))
+)
